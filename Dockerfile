@@ -18,9 +18,11 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy only the necessary files from the builder stage
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/index.js .
-COPY --from=builder /app/package.json .
+COPY package*.json ./
+
+RUN npm install
+
+COPY . .
 
 # Define the command to run the application
-CMD ["npm", "start"]
+CMD ["node", "index.js"]
