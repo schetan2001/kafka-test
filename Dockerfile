@@ -1,4 +1,4 @@
-# Stage 1: Build the application
+# Stage 1: Build the application and install dependencies
 FROM node:18-alpine AS builder
 
 WORKDIR /app
@@ -6,8 +6,8 @@ WORKDIR /app
 # Copy package.json and package-lock.json to leverage Docker cache
 COPY package*.json ./
 
-# Install dependencies (only production dependencies for the final image)
-RUN npm install --omit=dev
+# Install dependencies (all dependencies are installed here)
+RUN npm install
 
 # Copy the rest of the application source code
 COPY . .
@@ -17,12 +17,11 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy only the necessary files from the builder stage
-COPY package*.json ./
+# This is the key change: we copy only the required files and the node_modules directory
+# from the 'builder' stage. We do not re-run npm install.
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/index.js ./index.js
 
-RUN npm install
-
-COPY . .
-
-# Define the command to run the application
-CMD ["node", "index.js"]
+# The CMD to run the application
+CMD ["npm", "start"]
