@@ -1,0 +1,14 @@
+{
+    "name": "manageengine-ticket-creator",
+    "version": "1.0.0",
+    "description": "A custom application to create ManageEngine tickets from a Kafka topic.",
+    "main": "index.js",
+    "scripts": {
+      "start": "node index.js"
+    },
+    "dependencies": {
+      "kafkajs": "^2.2.4",
+      "axios": "^1.6.8"
+    },
+    "license": "MIT"
+  }
