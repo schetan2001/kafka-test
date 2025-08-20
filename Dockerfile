@@ -1,6 +1,6 @@
 # Dockerfile
-# This Dockerfile is updated to run the one-time script,
-# now including the package-lock.json for consistent builds.
+# This version of the Dockerfile includes verbose logging
+# to help diagnose the build failure.
 
 # Use an official Node.js image as the base
 FROM node:18-alpine
@@ -12,9 +12,17 @@ WORKDIR /app
 COPY package*.json ./
 COPY package-lock.json ./
 
+# Start verbose logging for dependency installation
+RUN echo "Starting dependency installation..."
+
 # Install Node.js dependencies
-# npm ci is used here for more reliable, clean installs based on package-lock.json.
+# The `npm ci` command relies on package-lock.json for a consistent install.
+# We will use `npm ci` here.
+# Note: This will fail if package.json and package-lock.json are out of sync.
 RUN npm ci
+
+# Log completion of installation
+RUN echo "Dependency installation complete."
 
 # Copy the rest of the application code
 COPY . .
