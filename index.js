@@ -1,124 +1,96 @@
-const { Kafka } = require('kafkajs');
+// index.js
+// This script acts as a dynamic transform connector by reading a full 'curl'
+// command from an environment variable, parsing it, and executing the
+// corresponding HTTP request. This approach provides a flexible, command-line
+// driven way to interact with a REST API using only environment variables.
+
 const axios = require('axios');
+const util = require('util');
 
-// --- Environment Variables ---
-const KAFKA_BROKERS = process.env.KAFKA_BROKERS.split(',');
-const KAFKA_TOPIC = process.env.KAFKA_TOPIC;
-const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID;
-const ZOHO_CLIENT_SECRET = process.env.ZOHO_CLIENT_SECRET;
-const ZOHO_REFRESH_TOKEN = process.env.ZOHO_REFRESH_TOKEN;
-const MANAGEENGINE_API_URL = process.env.MANAGEENGINE_API_URL;
-const REQUESTER_EMAIL = process.env.REQUESTER_EMAIL;
+/**
+ * Parses a simplified curl command string into a structured object
+ * for an HTTP request. This function handles common flags like -X (method),
+ * -H (header), -d (data), and the URL.
+ * It's designed for single-execution scripts and doesn't support all curl features.
+ * @param {string} curlString The curl command to parse.
+ * @returns {object} An object containing the parsed request details: { method, url, headers, data }.
+ */
+function parseCurl(curlString) {
+    const parts = curlString.split(' ').map(p => p.trim());
+    let method = 'GET';
+    let url = '';
+    const headers = {};
+    let data = null;
 
-// --- Global Variables ---
-let accessToken = null;
-let tokenExpiryTime = null;
-
-// --- Kafka Setup ---
-const kafka = new Kafka({
-  clientId: 'manageengine-ticket-creator',
-  brokers: KAFKA_BROKERS
-});
-const consumer = kafka.consumer({ groupId: 'manageengine-group' });
-
-// --- Token Management ---
-async function getAccessToken() {
-  console.log("Attempting to get a new access token...");
-  try {
-    const response = await axios.post('https://accounts.zoho.in/oauth/v2/token', null, {
-      params: {
-        refresh_token: ZOHO_REFRESH_TOKEN,
-        grant_type: 'refresh_token',
-        client_id: ZOHO_CLIENT_ID,
-        client_secret: ZOHO_CLIENT_SECRET
-      }
-    });
-
-    accessToken = response.data.access_token;
-    // Token is valid for 1 hour (3600 seconds)
-    tokenExpiryTime = Date.now() + (response.data.expires_in * 1000) - 30000; // Refresh 30 seconds early
-    console.log("Successfully obtained new access token.");
-    return accessToken;
-
-  } catch (error) {
-    console.error('Failed to get access token:', error.response ? error.response.data : error.message);
-    throw new Error('Access token acquisition failed.');
-  }
-}
-
-async function getValidAccessToken() {
-  // Check if token is null or expired
-  if (!accessToken || Date.now() > tokenExpiryTime) {
-    await getAccessToken();
-  }
-  return accessToken;
-}
-
-// --- Ticket Creation ---
-async function createManageEngineTicket(messageValue) {
-  try {
-    const currentToken = await getValidAccessToken();
-    
-    // Parse the Kafka message to build the API body
-    const kafkaData = JSON.parse(messageValue.toString());
-
-    // Map your Kafka data to the ManageEngine request body
-    // This is the core transformation logic
-    const requestBody = {
-      request: {
-        subject: kafkaData.subject || "Ticket Created from Kafka",
-        group: { name: "RE ITSM Support" },
-        requester: { email_id: REQUESTER_EMAIL },
-        udf_fields: {
-          udf_char364: kafkaData.imei, // Example: mapping Kafka data to a UDF field
-          udf_char365: kafkaData.partno,
-          udf_char366: kafkaData.some_other_field,
-          // Continue mapping other fields as needed
-        },
-        template: { name: "Freshdesk" },
-        description: `Alert from Kafka. Details: ${JSON.stringify(kafkaData)}`
-      }
-    };
-
-    const headers = {
-      'Accept': 'application/vnd.manageengine.sdp.v3+json',
-      'Authorization': `Zoho-oauthtoken ${currentToken}`,
-      'Content-Type': 'application/json'
-    };
-
-    const response = await axios.post(MANAGEENGINE_API_URL, requestBody, { headers });
-    
-    console.log(`Successfully created ticket: ${response.data.request.id}`);
-    
-  } catch (error) {
-    if (error.response) {
-      console.error('API Error:', error.response.status, error.response.data);
-    } else {
-      console.error('An unexpected error occurred:', error.message);
+    for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        if (part === '-X' && parts[i + 1]) {
+            method = parts[i + 1].toUpperCase();
+            i++;
+        } else if (part === '-H' && parts[i + 1]) {
+            const headerString = parts[i + 1].replace(/["']/g, ''); // Remove quotes
+            const [key, value] = headerString.split(':');
+            if (key && value) {
+                headers[key.trim()] = value.trim();
+            }
+            i++;
+        } else if (part === '-d' && parts[i + 1]) {
+            try {
+                // Assuming data is a JSON string
+                data = JSON.parse(parts[i + 1].replace(/["']/g, ''));
+            } catch (e) {
+                console.error('Error parsing data JSON:', e.message);
+                data = parts[i + 1];
+            }
+            i++;
+        } else if (part.startsWith('http')) {
+            url = part.replace(/["']/g, ''); // The URL is the first part that starts with http
+        }
     }
-    // Depending on the error, you might want to re-try
-    // For a 401 error, you might force a token refresh and re-try the request once
-  }
+
+    return { method, url, headers, data };
 }
 
-// --- Main Function to Run the Consumer ---
-async function run() {
-  await consumer.connect();
-  await consumer.subscribe({ topic: KAFKA_TOPIC, fromBeginning: false });
+// Main execution function
+async function main() {
+    const curlCommand = process.env.CURL_COMMAND;
 
-  await consumer.run({
-    eachMessage: async ({ topic, partition, message }) => {
-      console.log({
-        topic,
-        partition,
-        offset: message.offset,
-        value: message.value.toString(),
-      });
-      
-      // Process the message and create a ticket
-      await createManageEngineTicket(message.value);
-    },
-  });
+    if (!curlCommand) {
+        console.error('Error: CURL_COMMAND environment variable is not set.');
+        return;
+    }
+
+    try {
+        // Parse the curl command from the environment variable.
+        const requestOptions = parseCurl(curlCommand);
+
+        if (!requestOptions.url) {
+            console.error('Error: Could not find a valid URL in the CURL_COMMAND.');
+            return;
+        }
+
+        // Use axios to make the HTTP request with the parsed options.
+        const response = await axios({
+            method: requestOptions.method,
+            url: requestOptions.url,
+            headers: requestOptions.headers,
+            data: requestOptions.data,
+        });
+
+        // Log the full response data.
+        // The util.inspect function provides a clean, formatted output of the JSON object.
+        console.log(util.inspect(response.data, { showHidden: false, depth: null, colors: true }));
+    } catch (error) {
+        // Handle errors from the axios request.
+        if (error.response) {
+            console.error('API call failed with status:', error.response.status);
+            console.error('Response data:', util.inspect(error.response.data, { showHidden: false, depth: null, colors: true }));
+        } else {
+            console.error('An unexpected error occurred:', error.message);
+        }
+        process.exit(1); // Exit with a non-zero code to indicate failure.
+    }
 }
 
-run().catch(console.error);
+// Execute the main function.
+main();

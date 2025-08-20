@@ -1,27 +1,24 @@
-# Stage 1: Build the application and install dependencies
-FROM node:18-alpine AS builder
+# Dockerfile
+# This Dockerfile is updated to run the one-time script,
+# now including the package-lock.json for consistent builds.
 
-WORKDIR /app
-
-# Copy package.json and package-lock.json to leverage Docker cache
-COPY package*.json ./
-
-# Install dependencies (all dependencies are installed here)
-RUN npm install
-
-# Copy the rest of the application source code
-COPY . .
-
-# Stage 2: Create the final, lean production image
+# Use an official Node.js image as the base
 FROM node:18-alpine
 
+# Set the working directory inside the container
 WORKDIR /app
 
-# This is the key change: we copy only the required files and the node_modules directory
-# from the 'builder' stage. We do not re-run npm install.
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/index.js ./index.js
+# Copy package.json and package-lock.json to leverage caching
+COPY package*.json ./
+COPY package-lock.json ./
 
-# The CMD to run the application
-CMD ["npm", "start"]
+# Install Node.js dependencies
+# npm ci is used here for more reliable, clean installs based on package-lock.json.
+RUN npm ci
+
+# Copy the rest of the application code
+COPY . .
+
+# Specify the command to run the application
+# This script will read the CURL_COMMAND env variable, make the call, and exit.
+CMD [ "npm", "start" ]
