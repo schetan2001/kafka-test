@@ -2,12 +2,12 @@ require("dotenv").config();
 const { ApolloServer, gql } = require("apollo-server");
 const axios = require("axios");
 const GraphQLJSON = require("graphql-type-json");
-const curlconverter = require('curlconverter'); // npm install curlconverter
 
 const { CURL_STRING, SERVER_PORT } = process.env;
 
-function parseCurl(curl) {
+async function parseCurl(curl) {
   try {
+    const curlconverter = await import('curlconverter');
     const parsed = curlconverter.toJson(curl);
     const { url, headers } = parsed;
     return { url, headers };
@@ -29,7 +29,7 @@ const resolvers = {
   Query: {
     callRest: async () => {
       try {
-        const { url, headers } = parseCurl(CURL_STRING);
+        const { url, headers } = await parseCurl(CURL_STRING);
         const res = await axios.get(url, { headers });
         return { payload: res.data };
       } catch (err) {
