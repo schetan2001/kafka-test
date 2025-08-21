@@ -8,9 +8,9 @@ const { CURL_STRING, SERVER_PORT } = process.env;
 async function parseCurl(curl) {
   try {
     const curlconverter = await import('curlconverter');
-    const parsed = curlconverter.toJson(curl);
-    const { url, headers } = parsed;
-    return { url, headers };
+    const parsed = curlconverter.toJsonObject(curl);
+    const { raw_url, headers } = parsed;
+    return { url: raw_url, headers };
   } catch (err) {
     throw new Error("Invalid cURL string");
   }
