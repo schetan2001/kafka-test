@@ -1,0 +1,21 @@
+{
+  "name": "kafka-kafka",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "apollo-server": "^3.13.0",
+    "axios": "^1.11.0",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "graphql": "^16.11.0",
+    "graphql-type-json": "^0.3.2",
+    "kafkajs": "^2.2.4"
+  }
+}
