@@ -1,0 +1,13 @@
+{
+  "name": "me-ticket-connector",
+  "version": "1.0.0",
+  "main": "index.js",
+  "description": "ManageEngine ticket creation connector",
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "apollo-server": "^3.13.0",
+    "axios": "^1.11.0",
+    "dotenv": "^16.6.1"
+  }
+}
