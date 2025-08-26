@@ -1,0 +1,9 @@
+{
+  "name": "simple-kafka-transform",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "kafkajs": "^2.2.4",
+    "dotenv": "^16.6.1"
+  }
+}
