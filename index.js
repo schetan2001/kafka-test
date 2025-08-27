@@ -5,9 +5,8 @@ const INPUT_TOPIC = process.env.INPUT_TOPIC;
 const OUTPUT_TOPIC = process.env.OUTPUT_TOPIC;
 const KAFKA_BROKER = process.env.KAFKA_BROKER || "localhost:9092";
 
-const KEY1 = process.env.KEY1;
-const KEY2 = process.env.KEY2;
-const KEY3 = process.env.KEY3;
+// Accept keys as comma-separated string
+const KEYS = process.env.KEYS ? process.env.KEYS.split(",").map(k => k.trim()) : [];
 
 const kafka = new Kafka({
   clientId: "kafka-transform",
@@ -33,11 +32,10 @@ async function start() {
       }
 
       // Build new JSON body using only the specified keys
-      const outputPayload = {
-        [KEY1]: input[KEY1],
-        [KEY2]: input[KEY2],
-        [KEY3]: input[KEY3]
-      };
+      const outputPayload = {};
+      KEYS.forEach(key => {
+        outputPayload[key] = input[key];
+      });
 
       await producer.send({
         topic: OUTPUT_TOPIC,
