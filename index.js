@@ -51,7 +51,7 @@ async function start() {
             messages: [{ value: JSON.stringify({ vin, alert }) }]
           });
           console.log(`Published ${alert} alert for VIN ${vin} on 8th occurrence`);
-          alertCounter[key] = 0; // Reset if you want to repeat every 8th
+          alertCounter[key] = 0;
         }
       }
     }
