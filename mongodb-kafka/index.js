@@ -10,13 +10,12 @@ const {
   MONGO_USERNAME,
   MONGO_PASSWORD,
   MONGO_HOST,
-  MONGO_PORT,
   MONGO_DB,
   MONGO_COLLECTION
 } = process.env;
 
 // ===== MongoDB connection string =====
-const mongoUri = `mongodb+srv://${MONGO_USERNAME}:${encodeURIComponent(MONGO_PASSWORD)}@${MONGO_HOST}:${MONGO_PORT}/${MONGO_DB}?authSource=admin`;
+const mongoUri = `mongodb+srv://${MONGO_USERNAME}:${encodeURIComponent(MONGO_PASSWORD)}@${MONGO_HOST}/${MONGO_DB}?authSource=admin`;
 
 let db;
 
