@@ -1,19 +1,22 @@
 {
-    "name": "graphql-kafka-subscription",
-    "version": "1.0.0",
-    "description": "GraphQL subscription with Kafka topic",
-    "main": "index.js",
-    "dependencies": {
-      "graphql": "^16.8.1",
-      "graphql-subscriptions": "^2.0.0",
-      "kafkajs": "^2.2.4",
-      "apollo-server": "^3.13.0",
-      "dotenv": "^16.6.1"
-    },
-    "devDependencies": {},
-    "scripts": {
-      "start": "node index.js"
-    },
-    "author": "",
-    "license": "ISC"
-  }
+  "name": "graphql-kafka-subscription",
+  "version": "1.0.0",
+  "description": "GraphQL subscription with Kafka topic",
+  "main": "index.js",
+  "dependencies": {
+    "@apollo/server": "^4.10.0",
+    "graphql": "^16.8.1",
+    "ws": "^8.16.0",
+    "graphql-ws": "^5.16.1",
+    "@whatwg-node/fetch": "^0.10.4",
+    "graphql-subscriptions": "^2.0.0",
+    "kafkajs": "^2.2.4",
+    "dotenv": "^16.6.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "",
+  "license": "ISC"
+}

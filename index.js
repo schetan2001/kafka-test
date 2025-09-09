@@ -1,7 +1,14 @@
 require("dotenv").config();
 const { Kafka } = require("kafkajs");
-const { ApolloServer, gql } = require("apollo-server");
+const { ApolloServer } = require('@apollo/server');
+const { expressMiddleware } = require('@apollo/server/express4');
+const { ApolloServerPluginDrainHttpServer } = require('@apollo/server/plugin/drainHttpServer');
 const { PubSub } = require("graphql-subscriptions");
+const express = require('express');
+const http = require('http');
+const { makeExecutableSchema } = require('@graphql-tools/schema');
+const { WebSocketServer } = require('ws');
+const { useServer } = require('graphql-ws/lib/use/ws');
 
 const KAFKA_BROKER = process.env.KAFKA_BROKER || "localhost:9092";
 const KAFKA_TOPIC = process.env.KAFKA_TOPIC;
@@ -34,7 +41,7 @@ async function startKafkaConsumer() {
 }
 
 // ===== GraphQL setup =====
-const typeDefs = gql`
+const typeDefs = `
   type KafkaDataType {
     message: String
   }
@@ -59,13 +66,39 @@ const resolvers = {
   },
 };
 
+// Create schema, which will be passed to GraphQL WS and Apollo Server
+const schema = makeExecutableSchema({ typeDefs, resolvers });
+
+// Create an Express app and HTTP server;
+const app = express();
+const httpServer = http.createServer(app);
+
+// Set up WebSocket server using the schema
+const wsServer = new WebSocketServer({
+  server: httpServer,
+  path: '/',
+});
+
+useServer({ schema }, wsServer);
+
+// Set up Apollo Server
 const server = new ApolloServer({
-  typeDefs,
-  resolvers,
+  schema,
+  plugins: [
+    // Proper shutdown for the HTTP server.
+    ApolloServerPluginDrainHttpServer({ httpServer }),
+  ],
 });
 
 // Start the server
-server.listen(SERVER_PORT).then(({ url }) => {
-  console.log(` Server ready at ${url}`);
-  startKafkaConsumer().catch(console.error);
-});
+async function startApolloServer() {
+  await server.start();
+  app.use('/', express.json(), expressMiddleware(server));
+
+  httpServer.listen(SERVER_PORT, () => {
+    console.log(`Server is running on port ${SERVER_PORT}`);
+    startKafkaConsumer().catch(console.error);
+  });
+}
+
+startApolloServer();
