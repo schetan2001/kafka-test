@@ -33,7 +33,7 @@ async function startKafkaConsumer() {
     eachMessage: async ({ message }) => {
       try {
         const payload = JSON.parse(message.value.toString());
-        pubsub.publish("KAFKA_DATA", payload);
+        pubsub.publish("KAFKA_DATA", { kafkaData: payload });
       } catch (err) {
         console.error("Invalid Kafka message:", err.message);
       }
