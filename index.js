@@ -9,6 +9,7 @@ const http = require('http');
 const { makeExecutableSchema } = require('@graphql-tools/schema');
 const { WebSocketServer } = require('ws');
 const { useServer } = require('graphql-ws/lib/use/ws');
+const { GraphQLJSON } = require('graphql-type-json');
 
 const KAFKA_BROKER = process.env.KAFKA_BROKER || "localhost:9092";
 const KAFKA_TOPIC = process.env.KAFKA_TOPIC;
@@ -32,7 +33,7 @@ async function startKafkaConsumer() {
     eachMessage: async ({ message }) => {
       try {
         const payload = JSON.parse(message.value.toString());
-        pubsub.publish("KAFKA_DATA", { kafkaData: payload });
+        pubsub.publish("KAFKA_DATA", payload);
       } catch (err) {
         console.error("Invalid Kafka message:", err.message);
       }
@@ -42,20 +43,19 @@ async function startKafkaConsumer() {
 
 // ===== GraphQL setup =====
 const typeDefs = `
-  type KafkaDataType {
-    message: String
-  }
+  scalar JSON
 
   type Query {
     hello: String
   }
 
   type Subscription {
-    kafkaData: KafkaDataType
+    kafkaData: JSON
   }
 `;
 
 const resolvers = {
+  JSON: GraphQLJSON,
   Query: {
     hello: () => "Hello world!",
   },

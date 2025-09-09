@@ -11,7 +11,8 @@
     "@whatwg-node/fetch": "^0.10.4",
     "graphql-subscriptions": "^2.0.0",
     "kafkajs": "^2.2.4",
-    "dotenv": "^16.6.1"
+    "dotenv": "^16.6.1",
+    "graphql-type-json": "^0.3.2"
   },
   "devDependencies": {},
   "scripts": {
