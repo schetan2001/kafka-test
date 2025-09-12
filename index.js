@@ -2,6 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const dotenv = require("dotenv");
 
+
 dotenv.config();
 const app = express();
 app.use(express.json());
@@ -16,11 +17,13 @@ const KEYS3 = process.env.KEYS3;
 
 async function parseCurl(curl) {
   try {
+    console.log("curl ",curl);
     const curlconverter = await import('curlconverter');
     const parsed = curlconverter.toJsonObject(curl);
     const { raw_url, headers } = parsed;
     return { url: raw_url, headers };
   } catch (err) {
+    console.log("error",err);
     throw new Error("Invalid cURL string");
   }
 }
@@ -53,29 +56,34 @@ app.get("/aggregate", async (req, res) => {
       axios.get(BACKEND_API3, { headers: headers3 }).then(r => r.data).catch(e => ({ error: e.message }))
     ]);
 
-    const extractedData1 = Array.isArray(response1) ? response1.map(item => {
+    
+
+    const extractedData1 = response1?.responseData?.vehicleDetails ? response1.responseData.vehicleDetails.map(item => {
       const extracted = {};
+     // console.log("ITEM ",item);
       API1_KEYS.forEach(key => {
         extracted[key] = item[key];
       });
       return extracted;
     }) : [];
 
-    const extractedData2 = Array.isArray(response2) ? response2.map(item => {
-      const extracted = {};
-      API2_KEYS.forEach(key => {
-        extracted[key] = item[key];
-      });
-      return extracted;
-    }) : [];
+    const extractedData2 = response2?.preconditions ? response2.preconditions.map(item => {
+  const extracted = {};
+  API2_KEYS.forEach(key => {
+    extracted[key] = item[key];
+  });
+  return extracted;
+}) : [];
 
-    const extractedData3 = Array.isArray(response3) ? response3.map(item => {
-      const extracted = {};
-      API3_KEYS.forEach(key => {
-        extracted[key] = item[key];
-      });
-      return extracted;
-    }) : [];
+const extractedData3 = response3?.packages ? response3.packages.map(item => {
+  const extracted = {};
+  API3_KEYS.forEach(key => {
+    extracted[key] = item[key];
+  });
+  return extracted;
+}) : [];
+
+
 
     return res.json({
       service1: extractedData1,
