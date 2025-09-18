@@ -93,15 +93,19 @@ app.get("/connect", async (req, res) => {
 });
 
 function getValue(obj, key) {
-  const keys = key.split('.');
+  const keys = key.split(".");
   let value = obj;
+  console.log(`getValue called with obj:`, obj, `and key:`, key);
   for (const k of keys) {
-    if (value && typeof value === 'object' && k in value) {
+    console.log(`Current key:`, k, `Current value:`, value);
+    if (value && typeof value === "object" && k in value) {
       value = value[k];
     } else {
+      console.log(`Property not found for key:`, k);
       return undefined; // Property not found
     }
   }
+  console.log(`Returning value:`, value);
   return value;
 }
 
