@@ -56,7 +56,9 @@ app.get("/connect", async (req, res) => {
       if (apiConfig.curl) {
         try {
           const { url, headers } = await parseCurl(apiConfig.curl);
-          const API_KEYS = apiConfig.keys ? apiConfig.keys.split(",").map(k => k.trim()) : [];
+          const API_KEYS = apiConfig.keys
+            ? apiConfig.keys.split(",").map((k) => k.trim())
+            : [];
 
           const response = await axios.get(url, { headers });
 
@@ -70,12 +72,25 @@ app.get("/connect", async (req, res) => {
               });
               return extracted;
             });
-          } else if (typeof response.data === 'object' && response.data !== null) {
-            const extracted = {};
-            API_KEYS.forEach(key => {
-              extracted[key] = getValue(response.data, key);
-            });
-            extractedData.push(extracted);
+          } else if (typeof response.data === "object" && response.data !== null) {
+            extractedData = []; // Initialize extractedData as an array
+            if (apiConfig.name === "API1" && response.data.responseData && Array.isArray(response.data.responseData.vehicleDetails)) {
+              response.data.responseData.vehicleDetails.forEach(vehicle => {
+                const extracted = {};
+                API_KEYS.forEach(key => {
+                  extracted[key] = getValue(vehicle, key); // Extract from vehicle object
+                });
+                extractedData.push(extracted);
+              });
+            } else if (apiConfig.name === "API2" && Array.isArray(response.data.preconditions)) {
+              response.data.preconditions.forEach(precondition => {
+                const extracted = {};
+                API_KEYS.forEach(key => {
+                  extracted[key] = getValue(precondition, key); // Extract from precondition object
+                });
+                extractedData.push(extracted);
+              });
+            }
           }
 
           results.push({ service: apiConfig.name, data: extractedData });
@@ -102,7 +117,7 @@ function getValue(obj, key) {
       value = value[k];
     } else {
       console.log(`Property not found for key:`, k);
-      return undefined; // Property not found
+      return undefined;
     }
   }
   console.log(`Returning value:`, value);
