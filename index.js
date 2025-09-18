@@ -21,6 +21,7 @@ const KEYS5 = process.env.KEYS5;
 
 async function parseCurl(curl) {
   try {
+    console.log("curl ",curl);
     const curlconverter = await import('curlconverter');
     const parsed = curlconverter.toJsonObject(curl);
     const { raw_url, headers } = parsed;
