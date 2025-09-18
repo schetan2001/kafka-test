@@ -22,7 +22,7 @@ const KEYS5 = process.env.KEYS5;
 async function parseCurl(curl) {
   try {
     console.log("curl ",curl);
-    const curlconverter = await import('curlconverter');
+    const curlconverter = await import("curlconverter");
     const parsed = curlconverter.toJsonObject(curl);
     const { raw_url, headers } = parsed;
     return { url: raw_url, headers };
@@ -40,7 +40,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/aggregate", async (req, res) => {
+app.get("/connect", async (req, res) => {
   try {
     const apiConfigs = [
       { curl: CURL1, keys: KEYS1, name: "API1" },
@@ -55,24 +55,37 @@ app.get("/aggregate", async (req, res) => {
         if (apiConfig.curl) {
           try {
             const { url, headers } = await parseCurl(apiConfig.curl);
-            const API_KEYS = apiConfig.keys ? apiConfig.keys.split(",").map(k => k.trim()) : [];
+            const API_KEYS = apiConfig.keys
+              ? apiConfig.keys.split(",").map((k) => k.trim())
+              : [];
 
             const response = await axios.get(url, { headers });
 
-            const extractedData = Array.isArray(response.data) ? response.data.map(item => {
-              const extracted = {};
-              API_KEYS.forEach(key => {
-                extracted[key] = item[key];
-              });
-              return extracted;
-            }) : [];
+            const extractedData = Array.isArray(response.data)
+              ? response.data.map((item) => {
+                  const extracted = {};
+                  API_KEYS.forEach((key) => {
+                    // Split the key by '.' to handle nested properties
+                    const keys = key.split(".");
+                    let value = item;
+                    for (const k of keys) {
+                      if (value && typeof value === "object" && k in value) {
+                        value = value[k];
+                      } else {
+                        value = undefined; // Property not found
+                        break;
+                      }
+                    }
+                    extracted[key] = value;
+                  });
+                  return extracted;
+                })
+              : [];
 
             return { service: apiConfig.name, data: extractedData };
           } catch (error) {
             return { service: apiConfig.name, error: error.message };
           }
-        } else {
-          return { service: apiConfig.name, data: null }; // Indicate API is not configured
         }
       })
     );
