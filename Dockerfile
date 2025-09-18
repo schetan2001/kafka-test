@@ -1,5 +1,7 @@
-# Use official Node.js image
-FROM node:18-alpine
+FROM node:latest
+
+# Install git
+RUN apt-get update && apt-get install -y git
 
 # Set working directory
 WORKDIR /app
@@ -10,11 +12,11 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install
 
-# Copy the rest of the code
+# Copy source code
 COPY . .
 
-# Expose port (optional)
-# EXPOSE 4000
+# Expose port
+## EXPOSE 3000
 
-# Start the connector
+# Start the application
 CMD ["node", "index.js"]
