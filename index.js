@@ -8,28 +8,29 @@ const app = express();
 app.use(express.json());
 
 const INGRESS_API_KEY = process.env.API_KEY;
-const CURL1 = process.env.CURL1;
-const CURL2 = process.env.CURL2;
-const CURL3 = process.env.CURL3;
-const CURL4 = process.env.CURL4;
-const CURL5 = process.env.CURL5;
-const KEYS1 = process.env.KEYS1;
-const KEYS2 = process.env.KEYS2;
-const KEYS3 = process.env.KEYS3;
-const KEYS4 = process.env.KEYS4;
-const KEYS5 = process.env.KEYS5;
+
+const API_CONFIGS = [
+  { curl: process.env.CURL1, keys: process.env.KEYS1, path: process.env.PATH1, name: "service1" },
+  { curl: process.env.CURL2, keys: process.env.KEYS2, path: process.env.PATH2, name: "service2" },
+  { curl: process.env.CURL3, keys: process.env.KEYS3, path: process.env.PATH3, name: "service3" },
+  { curl: process.env.CURL4, keys: process.env.KEYS4, path: process.env.PATH4, name: "service4" },
+  { curl: process.env.CURL5, keys: process.env.KEYS5, path: process.env.PATH5, name: "service5" }
+];
 
 async function parseCurl(curl) {
   try {
-    console.log("curl ", curl);
-    const curlconverter = await import("curlconverter");
+    const curlconverter = await import('curlconverter');
     const parsed = curlconverter.toJsonObject(curl);
     const { raw_url, headers } = parsed;
     return { url: raw_url, headers };
   } catch (err) {
-    console.log("error", err);
     throw new Error("Invalid cURL string");
   }
+}
+
+function getNestedValue(obj, path) {
+  if (!path) return obj;
+  return path.split('.').reduce((acc, part) => acc && acc[part], obj);
 }
 
 app.use((req, res, next) => {
@@ -40,91 +41,79 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/connect", async (req, res) => {
+app.get("/aggregate", async (req, res) => {
   try {
-    const apiConfigs = [
-      { curl: CURL1, keys: KEYS1, name: "API1" },
-      { curl: CURL2, keys: KEYS2, name: "API2" },
-      { curl: CURL3, keys: KEYS3, name: "API3" },
-      { curl: CURL4, keys: KEYS4, name: "API4" },
-      { curl: CURL5, keys: KEYS5, name: "API5" },
-    ];
+    const validConfigs = [];
 
-    const results = [];
-
-    for (const apiConfig of apiConfigs) {
-      if (apiConfig.curl) {
-        try {
-          const { url, headers } = await parseCurl(apiConfig.curl);
-          const API_KEYS = apiConfig.keys
-            ? apiConfig.keys.split(",").map((k) => k.trim())
-            : [];
-
-          const response = await axios.get(url, { headers });
-
-          let extractedData = [];
-
-          if (Array.isArray(response.data)) {
-            extractedData = response.data.map(item => {
-              const extracted = {};
-              API_KEYS.forEach(key => {
-                extracted[key] = getValue(item, key);
-              });
-              return extracted;
-            });
-          } else if (typeof response.data === "object" && response.data !== null) {
-            extractedData = []; // Initialize extractedData as an array
-            if (apiConfig.name === "API1" && response.data.responseData && Array.isArray(response.data.responseData.vehicleDetails)) {
-              response.data.responseData.vehicleDetails.forEach(vehicle => {
-                const extracted = {};
-                API_KEYS.forEach(key => {
-                  extracted[key] = getValue(vehicle, key); // Extract from vehicle object
-                });
-                extractedData.push(extracted);
-              });
-            } else if (apiConfig.name === "API2" && Array.isArray(response.data.preconditions)) {
-              response.data.preconditions.forEach(precondition => {
-                const extracted = {};
-                API_KEYS.forEach(key => {
-                  extracted[key] = getValue(precondition, key); // Extract from precondition object
-                });
-                extractedData.push(extracted);
-              });
-            }
-          }
-
-          results.push({ service: apiConfig.name, data: extractedData });
-        } catch (error) {
-          results.push({ service: apiConfig.name, error: error.message });
-        }
+    for (let i = 0; i < API_CONFIGS.length; i++) {
+      const config = API_CONFIGS[i];
+      if (config.curl && (!config.keys || !config.path)) {
+        return res.status(500).json({ error: `CURL${i + 1} is provided, but KEYS${i + 1} or PATH${i + 1} is missing.` });
+      }
+      if (config.curl && config.keys && config.path) {
+        validConfigs.push(config);
       }
     }
 
+    if (validConfigs.length === 0) {
+      return res.status(500).json({ error: "At least one CURL, KEYS, and PATH trio must be provided." });
+    }
+
+    const requests = validConfigs.map(async (config) => {
+      try {
+        const { url, headers } = await parseCurl(config.curl);
+        const response = await axios.get(url, { headers });
+        return { data: response.data, config };
+      } catch (e) {
+        console.error(`Error fetching data for ${config.name}:`, e.message);
+        return { error: e.message, config };
+      }
+    });
+
+    const responses = await Promise.all(requests);
+
+    const results = {};
+    responses.forEach((response) => {
+      const { data, config } = response;
+      if (data.error) {
+        results[config.name] = { error: data.error };
+        return;
+      }
+      
+      const keys = config.keys.split(",").map(k => k.trim());
+      const extractedData = [];
+
+      const dataToExtract = getNestedValue(data, config.path);
+
+      if (Array.isArray(dataToExtract)) {
+          dataToExtract.forEach(item => {
+              const extracted = {};
+              keys.forEach(key => {
+                  if (item.hasOwnProperty(key)) {
+                      extracted[key] = item[key];
+                  }
+              });
+              extractedData.push(extracted);
+          });
+      } else {
+        console.warn(`Path '${config.path}' did not lead to an array for ${config.name}.`);
+        results[config.name] = { data: dataToExtract, message: "Path did not lead to an array." };
+        return;
+      }
+
+      results[config.name] = extractedData;
+    });
+
     res.json(results);
-  } catch (error) {
-    console.error("Aggregation error:", error);
-    res.status(500).json({ error: "Aggregation failed" });
+
+  } catch (err) {
+    console.error("Internal error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-function getValue(obj, key) {
-  const keys = key.split(".");
-  let value = obj;
-  console.log(`getValue called with obj:`, obj, `and key:`, key);
-  for (const k of keys) {
-    console.log(`Current key:`, k, `Current value:`, value);
-    if (value && typeof value === "object" && k in value) {
-      value = value[k];
-    } else {
-      console.log(`Property not found for key:`, k);
-      return undefined;
-    }
-  }
-  console.log(`Returning value:`, value);
-  return value;
-}
-
+// Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Ingress listening on port ${PORT}`);
 });
