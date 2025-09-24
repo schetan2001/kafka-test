@@ -9,7 +9,7 @@ app.use(express.json());
 
 const INGRESS_API_KEY = process.env.API_KEY;
 
-// Separate KEY and PATH by a hyphen and a space (' - ').
+// API_CONFIGS now uses 'curl' for all configurations.
 const API_CONFIGS = [
   { curl: process.env.CURL1, keys: process.env.KEYS1, path: process.env.PATH1, name: "service1" },
   { curl: process.env.CURL2, keys: process.env.KEYS2, path: process.env.PATH2, name: "service2" },
@@ -45,17 +45,7 @@ app.use((req, res, next) => {
 
 app.get("/aggregate", async (req, res) => {
   try {
-    const validConfigs = [];
-
-    for (let i = 0; i < API_CONFIGS.length; i++) {
-      const config = API_CONFIGS[i];
-      if (config.curl && (!config.keys || !config.path)) {
-        return res.status(500).json({ error: `CURL${i + 1} is provided, but KEYS${i + 1} or PATH${i + 1} is missing.` });
-      }
-      if (config.curl && config.keys && config.path) {
-        validConfigs.push(config);
-      }
-    }
+    const validConfigs = API_CONFIGS.filter(config => config.curl && config.keys && config.path);
 
     if (validConfigs.length === 0) {
       return res.status(500).json({ error: "At least one CURL, KEYS, and PATH trio must be provided." });
@@ -63,8 +53,14 @@ app.get("/aggregate", async (req, res) => {
 
     const requests = validConfigs.map(async (config) => {
       try {
-        const { url, headers } = await parseCurl(config.curl);
-        const response = await axios.get(url, { headers });
+        const { url: baseUrl, headers } = await parseCurl(config.curl);
+        
+        const dynamicUrl = new URL(baseUrl);
+        for (const key in req.query) {
+          dynamicUrl.searchParams.set(key, req.query[key]);
+        }
+
+        const response = await axios.get(dynamicUrl.toString(), { headers });
         return { data: response.data, config };
       } catch (e) {
         console.error(`Error fetching data for ${config.name}:`, e.message);
@@ -77,8 +73,8 @@ app.get("/aggregate", async (req, res) => {
     const results = {};
     responses.forEach((response) => {
       const { data, config } = response;
-      if (data.error) {
-        results[config.name] = { error: data.error };
+      if (response.error) {
+        results[config.name] = { error: response.error };
         return;
       }
       
