@@ -9,6 +9,7 @@ app.use(express.json());
 
 const INGRESS_API_KEY = process.env.API_KEY;
 
+// Separate KEY and PATH by a hyphen and a space (' - ').
 const API_CONFIGS = [
   { curl: process.env.CURL1, keys: process.env.KEYS1, path: process.env.PATH1, name: "service1" },
   { curl: process.env.CURL2, keys: process.env.KEYS2, path: process.env.PATH2, name: "service2" },
@@ -28,6 +29,7 @@ async function parseCurl(curl) {
   }
 }
 
+// Function to get a nested value from an object using a dot-separated path.
 function getNestedValue(obj, path) {
   if (!path) return obj;
   return path.split('.').reduce((acc, part) => acc && acc[part], obj);
@@ -80,27 +82,46 @@ app.get("/aggregate", async (req, res) => {
         return;
       }
       
-      const keys = config.keys.split(",").map(k => k.trim());
-      const extractedData = [];
-
-      const dataToExtract = getNestedValue(data, config.path);
-
-      if (Array.isArray(dataToExtract)) {
-          dataToExtract.forEach(item => {
-              const extracted = {};
-              keys.forEach(key => {
-                  if (item.hasOwnProperty(key)) {
-                      extracted[key] = item[key];
-                  }
-              });
-              extractedData.push(extracted);
-          });
-      } else {
-        console.warn(`Path '${config.path}' did not lead to an array for ${config.name}.`);
-        results[config.name] = { data: dataToExtract, message: "Path did not lead to an array." };
-        return;
+      const pathSegments = config.path.split(' - ').map(p => p.trim());
+      const keyGroups = config.keys.split(' - ').map(k => k.trim());
+      
+      if (pathSegments.length !== keyGroups.length) {
+          results[config.name] = { error: "Mismatched number of path segments and key groups." };
+          return;
       }
 
+      const extractedData = {};
+      
+      // Iterate through each hyphen-separated path and key group.
+      pathSegments.forEach((pathSegment, index) => {
+        const keysToExtract = keyGroups[index].split(',').map(k => k.trim());
+        const dataToExtract = getNestedValue(data, pathSegment);
+        
+        // Handle both objects and arrays at the nested path.
+        if (Array.isArray(dataToExtract)) {
+          extractedData[pathSegment] = dataToExtract.map(item => {
+              const extracted = {};
+              keysToExtract.forEach(key => {
+                if (item.hasOwnProperty(key)) {
+                  extracted[key] = item[key];
+                }
+              });
+              return extracted;
+          });
+        } else if (typeof dataToExtract === 'object' && dataToExtract !== null) {
+          const extracted = {};
+          keysToExtract.forEach(key => {
+            if (dataToExtract.hasOwnProperty(key)) {
+              extracted[key] = dataToExtract[key];
+            }
+          });
+          extractedData[pathSegment] = extracted;
+        } else {
+            console.warn(`Path '${pathSegment}' did not lead to a valid object or array for ${config.name}.`);
+            extractedData[pathSegment] = dataToExtract;
+        }
+      });
+      
       results[config.name] = extractedData;
     });
 
