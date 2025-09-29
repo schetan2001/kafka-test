@@ -6,7 +6,7 @@ require("dotenv").config();
 const SERVER_PORT = process.env.SERVER_PORT;
 const CAMPAIGN_MANAGER_BASE_URL =
   process.env.CAMPAIGN_MANAGER_BASE_URL ||
-  "https://qa-reg.gcp-c2c-develop.qualcomm.com/ota/campaign-manager";
+  "https://cbp-eu-uat.royalenfield.com/ota/campaign-manager";
 const API_KEY = process.env.API_KEY;
 const ECU_NAME = "composite";
 
