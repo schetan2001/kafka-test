@@ -1,15 +1,28 @@
 const express = require("express");
 const axios = require("axios");
 const dotenv = require("dotenv");
+const cors = require("cors"); // Import the cors middleware
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
 
+const corsOptions = {
+  origin: [
+    "https://tap-sit.royalenfield.com",
+    "http://localhost:3000",
+    "http://localhost:3001",
+  ],
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
+};
+
+app.use(cors(corsOptions));
+
 const INGRESS_API_KEY = process.env.API_KEY;
 
-// API_CONFIGS now uses 'curl' for all configurations.
 const API_CONFIGS = [
   { curl: process.env.CURL1, keys: process.env.KEYS1, path: process.env.PATH1, name: "service1" },
   { curl: process.env.CURL2, keys: process.env.KEYS2, path: process.env.PATH2, name: "service2" },
