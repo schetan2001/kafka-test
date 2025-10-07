@@ -1,6 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const multer = require("multer");
+const cors = require("cors");
 require("dotenv").config();
 
 const SERVER_PORT = process.env.SERVER_PORT;
@@ -11,6 +12,19 @@ const API_KEY = process.env.API_KEY;
 const ECU_NAME = "composite";
 
 const app = express();
+
+const corsOptions = {
+  origin: [
+    "https://tap-sit.royalenfield.com",
+    "http://localhost:3000",
+    "http://localhost:3001",
+  ],
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
+};
+
+app.use(cors(corsOptions));
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
