@@ -29,7 +29,7 @@ const schema = buildSchema(`
 
   type Mutation {
     updateLockUnlock(systemId: String!, name: String!, value: Int!): JSON
-    updateVehicleRideMode(systemId: String!, startTime: Float!, endTime: Float!, modeType: String!, mode: String!): JSON
+    updateVehicleRideMode(systemId: String!, startTime: Float, endTime: Float, modeType: String!, mode: String!, enabled: Boolean): JSON
   }
 
   scalar JSON
@@ -190,7 +190,7 @@ const root = {
         return {
           hillHold: extractSignalValue(
             signals,
-            "Display_info__Hill_Hold_TTL_RX_V"
+            "MCU_Data_2__Hill_Hold_Sts_RX_V"
           ),
           cruiseControlStatus: extractSignalValue(
             signals,
@@ -476,39 +476,29 @@ const root = {
     }
   },
 
-  updateVehicleRideMode: async ({
-    systemId,
-    startTime,
-    endTime,
-    modeType,
-    mode,
-  }) => {
+updateVehicleRideMode: async ({ systemId, startTime, endTime, modeType, mode, enabled }) => {
     try {
-      const dynamicPath = `vehicle_settings.${modeType}.${mode}`;
+      const dynamicPath = `vehicle_settings.${modeType}.${mode}`; // Corrected path
+      const url = `${BASE_URL}/cota-service/vehicle-configurations/update`;
 
       const payload = {
         updates: [
           {
             action: "EDIT",
             path: dynamicPath,
-            value: {
-              enabled: false,
-              start_time: startTime,
-              end_time: endTime,
-            },
+            value: { enabled: enabled, startTime: startTime, endTime: endTime },
           },
         ],
         systemIds: [systemId],
       };
 
-      const response = await axios.post(BASE_URL, payload, {
-        headers: {
-          "Content-Type": "application/json",
-          "api-key": COTA_API_KEY,
-          "x-requestor": "test",
-        },
-      });
+      const headers = {
+        "Content-Type": "application/json",
+        "api-key": COTA_API_KEY,
+        "x-requestor": "test",
+      };
 
+      const response = await axios.post(url, payload, { headers });
       return response.data;
     } catch (error) {
       console.error(
