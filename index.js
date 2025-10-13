@@ -47,7 +47,7 @@ const schema = buildSchema(`
 
   type VehicleStatusesResponse {
     hillHold: String
-    cruiseSetSpeed: String
+    cruiseControlStatus: String
     tractionControl: String
     regenSetting: String
     sideStandStatus: String
@@ -60,21 +60,24 @@ const schema = buildSchema(`
     slcOdo: String
     odometer: String
     lteConnStatus: String
-    t1DurationMins: String
-    t1MaxSpeed: String
-    t1AvgSpeed: String
-    t1AvgEff: String
-    t1TotalEnergyConsump: String
-    t2DurationMins: String
-    t2AvgEff: String
-    t2TotalEnergyConsump: String
-    t2MaxSpeed: String
-    t2AvgSpeed: String
+    trip1DurationHrs: String
+    trip1DurationMins: String
+    trip1MaxSpeed: String
+    trip1AvgSpeed: String
+    trip1AvgEff: String
+    trip1TotalEnergyConsump: String
+    trip2DurationHrs: String
+    trip2DurationMins: String
+    trip2AvgEff: String
+    trip2TotalEnergyConsump: String
+    trip2MaxSpeed: String
+    trip2AvgSpeed: String
     slcMaxSpeed: String
     slcAvgSpeed: String
     slcAvgEff: String
     slcTotalEnergyConsump: String
     slcDurationMins: String
+    liveDurationHrs: String
     liveDurationMins: String
     liveMaxSpeed: String
     liveAvgSpeed: String
@@ -89,6 +92,10 @@ const schema = buildSchema(`
     gpsStatus: String
     gpsFixValue: String
     mcuRideMode: String
+    absState: String
+    chargingMode: String
+    vehicleRange: String
+    batterySoc: String
     updatedTime: String
   }
 
@@ -181,9 +188,9 @@ const root = {
             signals,
             "Display_info__Hill_Hold_TTL_RX_V"
           ),
-          cruiseSetSpeed: extractSignalValue(
+          cruiseControlStatus: extractSignalValue(
             signals,
-            "Display_info__Cruise_Set_Speed_RX_V"
+            "MCU_Data_2__Cruise_Control_Status_RX_V"
           ),
           tractionControl: extractSignalValue(
             signals,
@@ -233,6 +240,10 @@ const root = {
             signals,
             "RF_Parameters_2__LTE_Conn_Sts_TX_V"
           ),
+            trip1DurationHrs: extractSignalValue(
+              signals,
+              "VCU_Data7__T1_Duration_Hrs_RX_V"
+            ),
           trip1DurationMins: extractSignalValue(
             signals,
             "VCU_Data7__T1_Duration_Mins_RX_V"
@@ -253,6 +264,10 @@ const root = {
             signals,
             "VCU_Data2__T1_Total_Energy_Consump_RX_V"
           ),
+            trip2DurationHrs: extractSignalValue(
+              signals,
+              "VCU_Data7__T2_Duration_Hrs_RX_V"
+            ),
           trip2DurationMins: extractSignalValue(
             signals,
             "VCU_Data7__T2_Duration_Mins_RX_V"
@@ -293,6 +308,10 @@ const root = {
             signals,
             "VCU_Data4__SLC_Duration_Mins_RX_V"
           ),
+          liveDurationHrs: extractSignalValue(
+            signals,
+            "VCU_Data8__Live_Duration_Hrs_RX_V"
+          ),
           liveDurationMins: extractSignalValue(
             signals,
             "VCU_Data8__Live_Duration_Mins_RX_V"
@@ -330,6 +349,22 @@ const root = {
           mcuRideMode: extractSignalValue(
             signals,
             "MCU_Data_2__MCU_Ride_Modes_RX_V"
+          ),
+          absState: extractSignalValue(
+            signals,
+            "SOM_Settings_Data__ABS_State_Sel_TX_V"
+          ),
+          chargingMode: extractSignalValue(
+            signals,
+            "Chrgr_STS_Info__Chrgr_Mode_RX_V"
+          ),
+          vehicleRange: extractSignalValue(
+            signals,
+            "Display_info__Vehicle_Range_RX_V"
+          ),
+          batterySoc: extractSignalValue(
+            signals,
+            "Batt_Sts_Info__Display_SoC_RX_V"
           ),
           updatedTime: updatedTime,
         };
