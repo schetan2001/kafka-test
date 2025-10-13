@@ -539,18 +539,15 @@ const root = {
   },
 };
 
-// Middleware for API Key verification
-app.use("/dashboard", (req, res, next) => {
-  const apiKey = req.headers["x-api-key"];
-  if (!apiKey || apiKey !== INGRESS_API_KEY) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
-});
-
-// Create GraphQL endpoint
 app.use(
   "/ffapp",
+  (req, res, next) => {
+    const apiKey = req.headers["x-api-key"];
+    if (!apiKey || apiKey !== INGRESS_API_KEY) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    next();
+  },
   graphqlHTTP({
     schema: schema,
     rootValue: root,
