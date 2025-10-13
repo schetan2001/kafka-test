@@ -60,6 +60,8 @@ const schema = buildSchema(`
     slcOdo: String
     odometer: String
     lteConnStatus: String
+    lteRSRQ: String
+    lteRSRP: String
     trip1DurationHrs: String
     trip1DurationMins: String
     trip1MaxSpeed: String
@@ -181,7 +183,9 @@ const root = {
         const event3101Signal = data.responseData.signals.find(
           (signal) => signal.eventType === 3101
         );
-        const updatedTime = event3101Signal ? event3101Signal.updatedTime : null;
+        const updatedTime = event3101Signal
+          ? event3101Signal.updatedTime
+          : null;
 
         return {
           hillHold: extractSignalValue(
@@ -216,34 +220,27 @@ const root = {
             signals,
             "SOM_Settings_Data__TPMS_Rear_TX_V"
           ),
-          liveOdo: extractSignalValue(
-            signals,
-            "VCU_Data9__Live_Odo_RX_V"
-          ),
-          trip1Odo: extractSignalValue(
-            signals,
-            "VCU_Data6__Trip1_Odo_RX_V"
-          ),
-          trip2Odo: extractSignalValue(
-            signals,
-            "VCU_Data6__Trip2_Odo_RX_V"
-          ),
-          slcOdo: extractSignalValue(
-            signals,
-            "VCU_Data5__SLC_Odo_RX_V"
-          ),
-          odometer: extractSignalValue(
-            signals,
-            "VCU_Data5__Odometer_RX_V"
-          ),
+          liveOdo: extractSignalValue(signals, "VCU_Data9__Live_Odo_RX_V"),
+          trip1Odo: extractSignalValue(signals, "VCU_Data6__Trip1_Odo_RX_V"),
+          trip2Odo: extractSignalValue(signals, "VCU_Data6__Trip2_Odo_RX_V"),
+          slcOdo: extractSignalValue(signals, "VCU_Data5__SLC_Odo_RX_V"),
+          odometer: extractSignalValue(signals, "VCU_Data5__Odometer_RX_V"),
           lteConnStatus: extractSignalValue(
             signals,
             "RF_Parameters_2__LTE_Conn_Sts_TX_V"
           ),
-            trip1DurationHrs: extractSignalValue(
-              signals,
-              "VCU_Data7__T1_Duration_Hrs_RX_V"
-            ),
+          lteRSRQ: extractSignalValue(
+            signals,
+            "RF_Parameters_2__LTE_RSRQ_TX_V"
+          ),
+          lteRSRP: extractSignalValue(
+            signals,
+            "RF_Parameters_2__LTE_RSRP_TX_V"
+          ),
+          trip1DurationHrs: extractSignalValue(
+            signals,
+            "VCU_Data7__T1_Duration_Hrs_RX_V"
+          ),
           trip1DurationMins: extractSignalValue(
             signals,
             "VCU_Data7__T1_Duration_Mins_RX_V"
@@ -264,10 +261,10 @@ const root = {
             signals,
             "VCU_Data2__T1_Total_Energy_Consump_RX_V"
           ),
-            trip2DurationHrs: extractSignalValue(
-              signals,
-              "VCU_Data7__T2_Duration_Hrs_RX_V"
-            ),
+          trip2DurationHrs: extractSignalValue(
+            signals,
+            "VCU_Data7__T2_Duration_Hrs_RX_V"
+          ),
           trip2DurationMins: extractSignalValue(
             signals,
             "VCU_Data7__T2_Duration_Mins_RX_V"
@@ -296,10 +293,7 @@ const root = {
             signals,
             "VCU_Data4__SLC_Avg_Speed_RX_V"
           ),
-          slcAvgEff: extractSignalValue(
-            signals,
-            "VCU_Data4__SLC_Avg_Eff_RX_V"
-          ),
+          slcAvgEff: extractSignalValue(signals, "VCU_Data4__SLC_Avg_Eff_RX_V"),
           slcTotalEnergyConsump: extractSignalValue(
             signals,
             "VCU_Data4__SLC_Total_Energy_Consump_RX_V"
@@ -516,7 +510,6 @@ const root = {
       });
 
       return response.data;
-
     } catch (error) {
       console.error(
         "Error updating vehicle ride mode:",
@@ -531,7 +524,8 @@ const root = {
         `${BASE_URL}/telemetry-curr/vehicles/${systemId}/last-parked-location`,
         {
           headers: {
-            accept: "application/com.c2c.telemetry.dto.v1.telemetryresponse.v1+json",
+            accept:
+              "application/com.c2c.telemetry.dto.v1.telemetryresponse.v1+json",
             "x-requestor": "x",
             "api-key": TELEMETRY_API_KEY,
           },
