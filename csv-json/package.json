@@ -1,0 +1,14 @@
+{
+  "name": "csv-to-json-kafka",
+  "version": "1.0.0",
+  "description": "Consumes CSV from Kafka, converts to JSON, and produces to Kafka",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "kafkajs": "^2.2.4",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {}
+}

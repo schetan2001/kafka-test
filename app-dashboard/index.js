@@ -24,6 +24,7 @@ const schema = buildSchema(`
     getLockUnlockStatus(systemId: String!): LockUnlockStatusResponse
     getLockUnlockTracking(trackingId: String!): JSON
     getVehicleRideModeTracking(trackingId: String!): JSON
+    getLastParkedLocation(systemId: String!): JSON
   }
 
   type Mutation {
@@ -489,6 +490,24 @@ const root = {
       return error.response?.data || { message: error.message };
     }
   },
+  getLastParkedLocation: async ({ systemId }) => {
+    try {
+      const response = await axios.get(
+        `${BASE_URL}/telemetry-curr/vehicles/${systemId}/last-parked-location`,
+        {
+          headers: {
+            accept: "application/com.c2c.telemetry.dto.v1.telemetryresponse.v1+json",
+            "x-requestor": "x",
+            "api-key": TELEMETRY_API_KEY,
+          },
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error(error);
+      return error.response?.data || { message: error.message };
+    }
+  },
 };
 
 // Middleware for API Key verification
@@ -502,7 +521,7 @@ app.use("/dashboard", (req, res, next) => {
 
 // Create GraphQL endpoint
 app.use(
-  "/home-page",
+  "/ffapp",
   graphqlHTTP({
     schema: schema,
     rootValue: root,
