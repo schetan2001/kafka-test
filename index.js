@@ -16,6 +16,7 @@ const STATE_API_KEY = "JHRhdGVvcGVyYXRpMCRuJGVydmljZUA0NTY";
 const TELEMETRY_API_KEY = "dGVsZW1ldHJ5LWN1cnJAMTIz";
 const CCSERVICE_API_KEY = "Y2NzZXJ2aWNlQDc4OQ";
 const VEHICLE_METADATA_API_KEY = "dmVoaWNsZS1hcGk";
+const VEHICLE_HEALTH_API_KEY = "ZHRjLWNvZGVz";
 
 // GraphQL schema
 const schema = buildSchema(`
@@ -27,6 +28,7 @@ const schema = buildSchema(`
     getVehicleRideModeTracking(trackingId: String!): JSON
     getLastParkedLocation(systemId: String!): JSON
     getVehicleMetadata(systemId: String!): VehicleMetadataResponse
+    getVehicleHealthStatus(systemId: String!): VehicleHealthStatusResponse
   }
 
   type Mutation {
@@ -122,6 +124,10 @@ const schema = buildSchema(`
   type VehicleMetadataResponse {
     systemId: String
     model: String
+  }
+
+  type VehicleHealthStatusResponse {
+    vehicleStatus: String
   }
 `);
 
@@ -555,6 +561,24 @@ updateVehicleRideMode: async ({ systemId, startTime, endTime, modeType, mode, en
     } catch (error) {
       console.error("Error fetching vehicle metadata:", error);
       throw new Error("Failed to fetch vehicle metadata");
+    }
+  },
+  getVehicleHealthStatus: async ({ systemId }) => {
+    try {
+      const url = `${BASE_URL}/vehicle-diagnostics/vehicles/${systemId}/health-report`;
+      const response = await axios.get(url, {
+        headers: {
+          accept: "*/*",
+          "api-key": VEHICLE_HEALTH_API_KEY,
+          "x-requestor": "abc",
+        },
+      });
+
+      const vehicleStatus = response.data?.vehicleHealthReport?.vehicleStatus || null;
+      return { vehicleStatus };
+    } catch (error) {
+      console.error("Error fetching vehicle health status:", error);
+      throw new Error("Failed to fetch vehicle health status");
     }
   },
 };
