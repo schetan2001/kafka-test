@@ -15,6 +15,7 @@ const COTA_API_KEY = "YzB0YSRlcnZpY2VANDU2";
 const STATE_API_KEY = "JHRhdGVvcGVyYXRpMCRuJGVydmljZUA0NTY";
 const TELEMETRY_API_KEY = "dGVsZW1ldHJ5LWN1cnJAMTIz";
 const CCSERVICE_API_KEY = "Y2NzZXJ2aWNlQDc4OQ";
+const VEHICLE_METADATA_API_KEY = "dmVoaWNsZS1hcGk";
 
 // GraphQL schema
 const schema = buildSchema(`
@@ -25,6 +26,7 @@ const schema = buildSchema(`
     getLockUnlockTracking(trackingId: String!): JSON
     getVehicleRideModeTracking(trackingId: String!): JSON
     getLastParkedLocation(systemId: String!): JSON
+    getVehicleMetadata(systemId: String!): VehicleMetadataResponse
   }
 
   type Mutation {
@@ -43,6 +45,7 @@ const schema = buildSchema(`
     connectionState: String
     gpsFix: String
     vehicleMode: String
+    speed: String
   }
 
   type VehicleStatusesResponse {
@@ -115,11 +118,16 @@ const schema = buildSchema(`
     trackingId: String
     message: String
   }
+
+  type VehicleMetadataResponse {
+    systemId: String
+    model: String
+  }
 `);
 
 // Helper function to extract signal value
 const extractSignalValue = (signals, signalName) => {
-  const signal = signals.find((s) => s.name === signalName);
+  const signal = signals?.find((s) => s.name === signalName && (!signalName.startsWith("AL_") || s.eventType === 3101));
   return signal ? signal.value : null;
 };
 
@@ -153,6 +161,7 @@ const root = {
           connectionState: vehicleData.connectionState,
           gpsFix: vehicleData.gpsFix,
           vehicleMode: vehicleData.vehicleMode,
+          speed: vehicleData.speed,
         };
       } else {
         throw new Error("Vehicle data not found");
@@ -525,6 +534,27 @@ updateVehicleRideMode: async ({ systemId, startTime, endTime, modeType, mode, en
     } catch (error) {
       console.error(error);
       return error.response?.data || { message: error.message };
+    }
+  },
+  getVehicleMetadata: async ({ systemId }) => {
+    try {
+      const url = `${BASE_URL}/vehicle-ops/metadata?systemId=${systemId}&pageNo=1&pageSize=10`;
+      const response = await axios.get(url, {
+        headers: {
+          accept: "application/com.c2c.vehicle.operations.dto.vehicledataresponsedto+json",
+          "api-key": VEHICLE_METADATA_API_KEY,
+          "x-requestor": "test",
+        },
+      });
+
+      const details = response.data?.responseData?.vehicleDetails?.[0];
+      return {
+        systemId: details?.systemId || null,
+        model: details?.model || null,
+      };
+    } catch (error) {
+      console.error("Error fetching vehicle metadata:", error);
+      throw new Error("Failed to fetch vehicle metadata");
     }
   },
 };
