@@ -74,7 +74,7 @@ const root = {
   getEligiblePackage: async ({ systemId }) => {
     try {
       const response = await axios.get(
-        `https://qa-reg.gcp-c2c-repl10.qualcomm.com/ota/campaign-manager/vehicles/${systemId}/ecus/versions/eligible?ecuName=composite&partNumber=585`,
+        `https://cbp-eu-uat.royalenfield.com/ota/campaign-manager/vehicles/${systemId}/ecus/versions/eligible?ecuName=composite&partNumber=585`,
         {
           headers: {
             accept: "*/*",
@@ -92,7 +92,7 @@ const root = {
   downloadPackage: async ({ packageId }) => {
     try {
       const response = await axios.get(
-        `https://qa-reg.gcp-c2c-repl10.qualcomm.com/ota/campaign-manager/packages/${packageId}/download-package`,
+        `https://cbp-eu-uat.royalenfield.com/ota/campaign-manager/packages/${packageId}/download-package`,
         {
           headers: {
             accept: "*/*",
