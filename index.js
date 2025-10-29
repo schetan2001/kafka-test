@@ -3,11 +3,25 @@ const { graphqlHTTP } = require("express-graphql");
 const { buildSchema } = require("graphql");
 const axios = require("axios");
 const dotenv = require("dotenv");
+const cors = require("cors");
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
+
+const corsOptions = {
+  origin: [
+    "https://tap-sit.royalenfield.com",
+    "http://localhost:3000",
+    "http://localhost:3001",
+  ],
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
+};
+
+app.use(cors(corsOptions));
 
 const INGRESS_API_KEY = process.env.API_KEY || "dashboard-api-key";
 const BASE_URL = process.env.BASE_URL || "https://cbp-eu-uat.royalenfield.com";
@@ -23,7 +37,6 @@ const schema = buildSchema(`
   type Query {
     getVehicleState(systemId: String!): VehicleStateResponse
     getVehicleStatuses(systemId: String!): VehicleStatusesResponse
-    getLockUnlockStatus(systemId: String!): LockUnlockStatusResponse
     getLockUnlockTracking(trackingId: String!): JSON
     getVehicleRideModeTracking(trackingId: String!): JSON
     getLastParkedLocation(systemId: String!): JSON
@@ -39,9 +52,7 @@ const schema = buildSchema(`
   scalar JSON
 
   type VehicleStateResponse {
-    parkMode: String
     ignition: String
-    status: String
     lastHeartBeatTime: String
     currentState: String
     connectionState: String
@@ -65,8 +76,7 @@ const schema = buildSchema(`
     slcOdo: String
     odometer: String
     lteConnStatus: String
-    lteRSRQ: String
-    lteRSRP: String
+    lteSignalStrength: String 
     trip1DurationHrs: String
     trip1DurationMins: String
     trip1MaxSpeed: String
@@ -103,16 +113,15 @@ const schema = buildSchema(`
     chargingMode: String
     vehicleRange: String
     batterySoc: String
+    chargingStatus: String
+    vehicleStatus: String
+    lockStatus: String
     updatedTime: String
   }
 
   type SignalValue {
     name: String
     value: String
-  }
-
-  type LockUnlockStatusResponse {
-    lockUnlockStatus: String
   }
 
   type CommandResponse {
@@ -133,8 +142,106 @@ const schema = buildSchema(`
 
 // Helper function to extract signal value
 const extractSignalValue = (signals, signalName) => {
-  const signal = signals?.find((s) => s.name === signalName && (!signalName.startsWith("AL_") || s.eventType === 3101));
+  // OBD Critical Packet for vehicle mode signals
+  const vehicleModeSignals = [
+    "Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V",
+    "Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V",
+    "Vehicle_Mode__Vehicle_Mode_Lvl_3_RX_V",
+  ];
+
+  const signal = signals?.find(
+    (s) =>
+      s.name === signalName &&
+      (vehicleModeSignals.includes(signalName)
+        ? s.eventType === 6500
+        : !signalName.startsWith("AL_") || s.eventType === 3101)
+  );
+
   return signal ? signal.value : null;
+};
+
+const getSignalStrength = (signals) => {
+  const rsrp = parseFloat(
+    extractSignalValue(signals, "RF_Parameters_2__LTE_RSRP_TX_V")
+  );
+  const rsrq = parseFloat(
+    extractSignalValue(signals, "RF_Parameters_2__LTE_RSRQ_TX_V")
+  );
+
+  if (isNaN(rsrp) || isNaN(rsrq)) return null;
+
+  const levels = ["Poor", "Fair", "Good", "Excellent"];
+
+  let rsrpLevel =
+    rsrp >= -85
+      ? "Excellent"
+      : rsrp >= -95
+      ? "Good"
+      : rsrp >= -105
+      ? "Fair"
+      : "Poor";
+
+  let rsrqLevel =
+    rsrq >= -10
+      ? "Excellent"
+      : rsrq >= -12
+      ? "Good"
+      : rsrq >= -15
+      ? "Fair"
+      : "Poor";
+
+  // Taking weaker of the two for final signal strength
+  const finalIndex = Math.min(
+    levels.indexOf(rsrpLevel),
+    levels.indexOf(rsrqLevel)
+  );
+  return levels[finalIndex];
+};
+
+const getChargingStatus = (signals) => {
+  const modeLvl1 = extractSignalValue(
+    signals,
+    "Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V"
+  );
+
+  if (modeLvl1 === "5") {
+    const modeLvl2 = extractSignalValue(
+      signals,
+      "Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V"
+    );
+
+    if (modeLvl2 === "15") return "Fast Charging";
+    if (modeLvl2 === "16") return "Slow Charging";
+  }
+
+  return "Not Charging";
+};
+
+const getVehicleStatus = (signals) => {
+  const modeLvl1 = extractSignalValue(
+    signals,
+    "Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V"
+  );
+
+  // First check if vehicle is riding
+  if (modeLvl1 === "4") return "Riding";
+
+  // If not riding, check lock status
+  const modeLvl3 = extractSignalValue(
+    signals,
+    "Vehicle_Mode__Vehicle_Mode_Lvl_3_RX_V"
+  );
+
+  if (["1", "4", "6"].includes(modeLvl3)) return "Locked";
+
+  // If not locked, check parking status
+  const modeLvl2 = extractSignalValue(
+    signals,
+    "Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V"
+  );
+  if (modeLvl2 === "12") return "Parked";
+
+  return "Unlocked";
 };
 
 // Resolver function for the query
@@ -159,9 +266,7 @@ const root = {
         const vehicleData = data.result[0].responseData.vehicleStateData;
         const lastHeartBeatTime = data.result[0].responseData.lastHeartBeatTime;
         return {
-          parkMode: vehicleData.parkMode,
           ignition: vehicleData.ignition,
-          status: data.result[0].status,
           lastHeartBeatTime: String(lastHeartBeatTime),
           currentState: vehicleData.currentState,
           connectionState: vehicleData.connectionState,
@@ -244,14 +349,7 @@ const root = {
             signals,
             "RF_Parameters_2__LTE_Conn_Sts_TX_V"
           ),
-          lteRSRQ: extractSignalValue(
-            signals,
-            "RF_Parameters_2__LTE_RSRQ_TX_V"
-          ),
-          lteRSRP: extractSignalValue(
-            signals,
-            "RF_Parameters_2__LTE_RSRP_TX_V"
-          ),
+          lteSignalStrength: getSignalStrength(signals),
           trip1DurationHrs: extractSignalValue(
             signals,
             "VCU_Data7__T1_Duration_Hrs_RX_V"
@@ -375,6 +473,12 @@ const root = {
             signals,
             "Batt_Sts_Info__Display_SoC_RX_V"
           ),
+          chargingStatus: getChargingStatus(signals),
+          vehicleStatus: getVehicleStatus(signals),
+          lockStatus: extractSignalValue(
+            signals,
+            "VCU_Data__Veh_Authentication_Flag_RX_V"
+          ),
           updatedTime: updatedTime,
         };
       } else {
@@ -384,43 +488,6 @@ const root = {
     } catch (error) {
       console.error("Error fetching vehicle statuses:", error);
       throw new Error("Failed to fetch vehicle statuses");
-    }
-  },
-  getLockUnlockStatus: async ({ systemId }) => {
-    try {
-      const response = await axios.get(
-        `${BASE_URL}/cota-service/vehicles/${systemId}/config`,
-        {
-          headers: {
-            accept:
-              "application/com.c2c.cota.common.dto.response.configresponsedto+json",
-            "x-requestor": "test",
-            "api-key": COTA_API_KEY,
-          },
-        }
-      );
-
-      const data = response.data;
-
-      if (
-        data &&
-        data.configurations &&
-        data.configurations.vehicle_settings &&
-        data.configurations.vehicle_settings.vehicle_features
-      ) {
-        const lockUnlockStatus =
-          data.configurations.vehicle_settings.vehicle_features[
-            "vehicle_remote_lock/unlock_via_lte"
-          ];
-        return {
-          lockUnlockStatus: lockUnlockStatus,
-        };
-      } else {
-        throw new Error("Lock unlock status not found");
-      }
-    } catch (error) {
-      console.error(error);
-      throw new Error("Failed to fetch lock unlock status");
     }
   },
   getLockUnlockTracking: async ({ trackingId }) => {
@@ -491,9 +558,16 @@ const root = {
     }
   },
 
-updateVehicleRideMode: async ({ systemId, startTime, endTime, modeType, mode, enabled }) => {
+  updateVehicleRideMode: async ({
+    systemId,
+    startTime,
+    endTime,
+    modeType,
+    mode,
+    enabled,
+  }) => {
     try {
-      const dynamicPath = `vehicle_settings.${modeType}.${mode}`; // Corrected path
+      const dynamicPath = `vehicle_settings.${modeType}.${mode}`;
       const url = `${BASE_URL}/cota-service/vehicle-configurations/update`;
 
       const payload = {
@@ -547,7 +621,8 @@ updateVehicleRideMode: async ({ systemId, startTime, endTime, modeType, mode, en
       const url = `${BASE_URL}/vehicle-ops/metadata?systemId=${systemId}&pageNo=1&pageSize=10`;
       const response = await axios.get(url, {
         headers: {
-          accept: "application/com.c2c.vehicle.operations.dto.vehicledataresponsedto+json",
+          accept:
+            "application/com.c2c.vehicle.operations.dto.vehicledataresponsedto+json",
           "api-key": VEHICLE_METADATA_API_KEY,
           "x-requestor": "test",
         },
@@ -574,7 +649,8 @@ updateVehicleRideMode: async ({ systemId, startTime, endTime, modeType, mode, en
         },
       });
 
-      const vehicleStatus = response.data?.vehicleHealthReport?.vehicleStatus || null;
+      const vehicleStatus =
+        response.data?.vehicleHealthReport?.vehicleStatus || null;
       return { vehicleStatus };
     } catch (error) {
       console.error("Error fetching vehicle health status:", error);
