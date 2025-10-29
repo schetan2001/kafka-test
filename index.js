@@ -116,6 +116,8 @@ const schema = buildSchema(`
     chargingStatus: String
     vehicleStatus: String
     lockStatus: String
+    timeToChargeHrs: String
+    timeToChargeMins: String
     updatedTime: String
   }
 
@@ -478,6 +480,14 @@ const root = {
           lockStatus: extractSignalValue(
             signals,
             "VCU_Data__Veh_Authentication_Flag_RX_V"
+          ),
+          timeToChargeHrs: extractSignalValue(
+            signals,
+            "Batt_Limits__Time_to_Chrg_Hrs_RX_V"
+          ),
+          timeToChargeMins: extractSignalValue(
+            signals,
+            "Batt_Limits__Time_to_Chrg_Mins_RX_V"
           ),
           updatedTime: updatedTime,
         };
