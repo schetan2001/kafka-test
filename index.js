@@ -5,51 +5,7 @@ const axios = require("axios");
 const KAFKA_BROKER = process.env.KAFKA_BROKER || "localhost:9092";
 const SOURCE_TOPIC = process.env.SOURCE_TOPIC || "notification-topic";
 const API_ENDPOINT = "https://mc3snfg-sfh7x8jmy5gw1rdk4zbq.rest.marketingcloudapis.com/messaging/v1/email/messages";
-
-// Token management
-let cachedToken = null;
-let tokenExpiry = null;
-
-const getAccessToken = async () => {
-  try {
-    // Check if we have a valid cached token
-    if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
-      return cachedToken;
-    }
-
-    // If not, fetch new token
-    const response = await axios.post('https://mc3snfg-sfh7x8jmy5gw1rdk4zbq.auth.marketingcloudapis.com/v2/token', {
-      grant_type: 'client_credentials',
-      client_id: process.env.CLIENT_ID,
-      client_secret: process.env.CLIENT_ID
-    });
-
-    cachedToken = response.data.access_token;
-    // Set token expiry (typically 20 minutes before actual expiry)
-    tokenExpiry = Date.now() + (response.data.expires_in - 1200) * 1000;
-    
-    return cachedToken;
-  } catch (error) {
-    console.error('Error fetching access token:', error);
-    throw error;
-  }
-};
-
-const sendEmail = async (payload) => {
-  try {
-    const token = await getAccessToken();
-    const response = await axios.post(API_ENDPOINT, payload, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Error sending email:', error);
-    throw error;
-  }
-};
+const AUTH_TOKEN = process.env.AUTH_TOKEN;
 
 // Kafka setup
 const kafka = new Kafka({
@@ -99,9 +55,14 @@ const processMessage = async (message) => {
     }
 
     if (payload) {
-      const result = await sendEmail(payload);
+      const response = await axios.post(API_ENDPOINT, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${AUTH_TOKEN}`
+        }
+      });
       console.log(`Email sent successfully for alertId: ${alertId}`);
-      return result;
+      return response.data;
     }
   } catch (error) {
     console.error('Error processing message:', error);
