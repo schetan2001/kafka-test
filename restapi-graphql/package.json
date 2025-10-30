@@ -12,6 +12,7 @@
   "dependencies": {
     "apollo-server": "^3.13.0",
     "axios": "^1.11.0",
+    "curlconverter": "^4.12.0",
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "graphql": "^16.11.0",

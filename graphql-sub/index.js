@@ -1,7 +1,15 @@
 require("dotenv").config();
 const { Kafka } = require("kafkajs");
-const { ApolloServer, gql } = require("apollo-server");
+const { ApolloServer } = require('@apollo/server');
+const { expressMiddleware } = require('@apollo/server/express4');
+const { ApolloServerPluginDrainHttpServer } = require('@apollo/server/plugin/drainHttpServer');
 const { PubSub } = require("graphql-subscriptions");
+const express = require('express');
+const http = require('http');
+const { makeExecutableSchema } = require('@graphql-tools/schema');
+const { WebSocketServer } = require('ws');
+const { useServer } = require('graphql-ws/lib/use/ws');
+const { GraphQLJSON } = require('graphql-type-json');
 
 const KAFKA_BROKER = process.env.KAFKA_BROKER || "localhost:9092";
 const KAFKA_TOPIC = process.env.KAFKA_TOPIC;
@@ -34,21 +42,20 @@ async function startKafkaConsumer() {
 }
 
 // ===== GraphQL setup =====
-const typeDefs = gql`
-  type KafkaDataType {
-    message: String
-  }
+const typeDefs = `
+  scalar JSON
 
   type Query {
     hello: String
   }
 
   type Subscription {
-    kafkaData: KafkaDataType
+    kafkaData: JSON
   }
 `;
 
 const resolvers = {
+  JSON: GraphQLJSON,
   Query: {
     hello: () => "Hello world!",
   },
@@ -59,13 +66,34 @@ const resolvers = {
   },
 };
 
+const schema = makeExecutableSchema({ typeDefs, resolvers });
+
+const app = express();
+const httpServer = http.createServer(app);
+
+const wsServer = new WebSocketServer({
+  server: httpServer,
+  path: '/',
+});
+
+useServer({ schema }, wsServer);
+
 const server = new ApolloServer({
-  typeDefs,
-  resolvers,
+  schema,
+  plugins: [
+    ApolloServerPluginDrainHttpServer({ httpServer }),
+  ],
 });
 
 // Start the server
-server.listen(SERVER_PORT).then(({ url }) => {
-  console.log(` Server ready at ${url}`);
-  startKafkaConsumer().catch(console.error);
-});
+async function startApolloServer() {
+  await server.start();
+  app.use('/', express.json(), expressMiddleware(server));
+
+  httpServer.listen(SERVER_PORT, () => {
+    console.log(`Server is running on port ${SERVER_PORT}`);
+    startKafkaConsumer().catch(console.error);
+  });
+}
+
+startApolloServer();

@@ -8,7 +8,8 @@ dotenv.config();
 
 const app = express();
 
-const INGRESS_API_KEY = process.env.API_KEY || '47629e22-f0d7-4af0-bab9-559689ef24ee';
+const INGRESS_API_KEY = process.env.API_KEY;
+const BASE_URL = process.env.BASE_URL;
 
 // Middleware for API Key verification
 app.use("/package-download", (req, res, next) => {
@@ -33,8 +34,8 @@ const schema = buildSchema(`
   }
 
   type EligiblePackageResponse {
-    message: String
-    ecuPackageDetail: EcuPackageDetail
+  message: String
+  ecuPackageDetails: [EcuPackageDetail]
   }
 
   type EcuPackageDetail {
@@ -71,33 +72,36 @@ const schema = buildSchema(`
 `);
 
 const root = {
-  getEligiblePackage: async ({ systemId }) => {
-    try {
-      const response = await axios.get(
-        `https://qa-reg.gcp-c2c-repl10.qualcomm.com/ota/campaign-manager/vehicles/${systemId}/ecus/versions/eligible?ecuName=composite&partNumber=585`,
-        {
-          headers: {
-            accept: "*/*",
-            "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
-            "x-requestor": "admin",
-          },
-        }
-      );
-      return response.data;
-    } catch (error) {
-      console.error(error);
-      throw new Error("Failed to fetch eligible package");
-    }
-  },
+getEligiblePackage: async ({ systemId }) => {
+  try {
+    const response = await axios.get(
+      `${BASE_URL}/ota/campaign-manager/vehicles/${systemId}/ecus/versions/eligible?ecuName=composite&partNumber=585`,
+      {
+        headers: {
+          accept: "*/*",
+          "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
+          "x-requestor": "fota",
+        },
+      }
+    );
+    return {
+      message: response.data?.message || "",
+      ecuPackageDetails: response.data?.ecuPackageDetails || [],
+    };
+  } catch (error) {
+    console.error(error);
+    throw new Error("Failed to fetch eligible package");
+  }
+},
   downloadPackage: async ({ packageId }) => {
     try {
       const response = await axios.get(
-        `https://qa-reg.gcp-c2c-repl10.qualcomm.com/ota/campaign-manager/packages/${packageId}/download-package`,
+        `${BASE_URL}/ota/campaign-manager/packages/${packageId}/download-package`,
         {
           headers: {
             accept: "*/*",
             "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
-            "x-requestor": "admin",
+            "x-requestor": "fota",
           },
         }
       );
@@ -119,7 +123,7 @@ app.use(
   })
 );
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 4005;
 app.listen(PORT, () => {
   console.log(`GraphQL server listening on port ${PORT}`);
 });

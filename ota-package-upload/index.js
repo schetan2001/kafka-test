@@ -1,16 +1,31 @@
 const express = require("express");
 const axios = require("axios");
 const multer = require("multer");
+const cors = require("cors"); // Import the cors middleware
 require("dotenv").config();
 
 const SERVER_PORT = process.env.SERVER_PORT;
 const CAMPAIGN_MANAGER_BASE_URL =
   process.env.CAMPAIGN_MANAGER_BASE_URL ||
-  "https://qa-reg.gcp-c2c-develop.qualcomm.com/ota/campaign-manager";
+  "https://cbp-eu-uat.royalenfield.com/ota/campaign-manager";
 const API_KEY = process.env.API_KEY;
 const ECU_NAME = "composite";
 
 const app = express();
+
+// Configure CORS
+const corsOptions = {
+  origin: [
+    "https://tap-sit.royalenfield.com",
+    "http://localhost:3000",
+    "http://localhost:3001",
+  ],
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  credentials: true, // Allow cookies to be sent
+  allowedHeaders: ["Content-Type", "Authorization", "x-api-key"], // Add 'x-api-key' here
+};
+
+app.use(cors(corsOptions)); // Use the cors middleware with the options
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });

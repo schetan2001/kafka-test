@@ -9,6 +9,7 @@ dotenv.config();
 const app = express();
 
 const INGRESS_API_KEY = process.env.API_KEY;
+const BASE_URL = process.env.BASE_URL;
 
 // Middleware for API Key verification
 app.use("/circular-geofence", (req, res, next) => {
@@ -27,18 +28,18 @@ app.use("/circular-geofence", (req, res, next) => {
 });
 
 const schema = buildSchema(`
-  type Query {
-    aggregateGeofence(name: String!, radius: Int!, coordinates: [[Float!]!]!, systemId: String!, notification: Int!): CombinedResponse
+type Query {
     getGeoFences(systemId: String!): GeoFenceResponse
   }
 
   type Mutation {
+    createGeofence(name: String!, radius: Int!, coordinates: [[Float!]!]!, systemId: String!, notification: Int!): AggregateGeofenceResponse
     updateGeofence(geoId: String!, name: String!, radius: Int!, coordinates: [[Float!]!]!): API1Response
-    deleteGeofence(geoId: String!): String
+    deleteGeofence(geoId: String!): DeleteGeofenceResponse
   }
 
   type GeoFenceResponse {
-    responseData: GeoFenceResponseData
+   responseData: GeoFenceResponseData
     message: String
   }
 
@@ -61,9 +62,6 @@ const schema = buildSchema(`
     geofenceStatus: String
     isAssociated: Boolean
     geofence: Geofence
-    systemId: String
-    vehicleMappingId: String
-    message: String
   }
 
   type Geofence {
@@ -90,145 +88,214 @@ const schema = buildSchema(`
   }
 
   type API2Response {
-    geofenceMappings: [GeofenceMapping]
+    geofenceMappings: [API2GeofenceMapping]
   }
 
-  type CombinedResponse {
+  type API2GeofenceMapping {
+    systemId: String
+    vehicleMappingId: String
+    message: String
+  }
+
+  type AggregateGeofenceResponse {
     api1: API1Response
     api2: API2Response
+    message: String
+  }
+
+  type DeleteGeofenceResponse {
+    message: String
   }
 `);
 
 // GraphQL resolver
 const root = {
-  aggregateGeofence: async ({ name, radius, coordinates, systemId, notification }) => {
-    // Construct payload for API 1
-    const api1Payload = {
-      name: name,
-      geometryType: "circle",
-      radius: radius,
-      coordinates: coordinates,
-      isActive: true,
-      tolerance: 0,
-      type: "personal",
-      isPOI: true,
-      tag: "Office"
-    };
-
-    // Call API 1
-    const api1Response = await axios.post(
-      "https://cbp-eu-uat.royalenfield.com/location/locations",
-      api1Payload,
-      {
-        headers: {
-          "accept": "application/com.c2c.telemetry.location.dto.v1.response.locationresponse.v1+json",
-          "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
-          "x-requestor": "test",
-          "Content-Type": "application/com.c2c.telemetry.location.dto.v1.request.locationrequestnew.v1+json"
-        }
-      }
-    );
-
-    const geoId = api1Response.data?.responseData?.geoId;
-
-    if (!geoId) {
-      throw new Error("Failed to retrieve geoId from API 1 response");
-    }
-
-    // Construct payload for API 2
-    const api2Payload = {
-      mapping: [
+createGeofence: async ({ name, radius, coordinates, systemId, notification}) => {
+    try {
+      // Check if geofence already exists
+      const getGeoFencesResponse = await axios.get(
+        `${BASE_URL}/location/vehicles/${systemId}/geo-fences?offset=1&limit=10&isActive=true`,
         {
-          schedule: {},
-          notification: notification,
-          isEdgeEnabled: 0,
-          ruleId: 0,
-          isActive: true,
-          ruleExpression: "string",
-          name: name,
-          systemId: systemId
+          headers: {
+            accept:
+              "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
+            "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
+            "x-requestor": "test",
+          },
         }
-      ]
-    };
+      );
 
-    // Call API 2
-    const api2Response = await axios.post(
-      `https://cbp-eu-uat.royalenfield.com/location/vehicles/geo-fences/${geoId}`,
-      api2Payload,
-      {
+      if (getGeoFencesResponse.status === 200 && getGeoFencesResponse.data?.responseData?.geofences?.length > 0) {
+        const existingGeofence = getGeoFencesResponse.data.responseData.geofences[0];
+        const geoId = existingGeofence.geofence.geoId;
+        return {
+          api1: {
+            responseData: {
+              geoId: geoId
+            },
+            message: "Data Fetched Successfully"
+          },
+          api2: null,
+          message: `Geofence already exists for this systemId. GeoId: ${geoId}`,
+        };
+      }
+
+      const api1Payload = {
+        name: name,
+        geometryType: "circle",
+        radius: radius,
+        coordinates: coordinates,
+        isActive: true,
+        tolerance: 0,
+        type: "personal",
+        isPOI: true,
+        tag: "Office",
+      };
+
+      const api1Response = await axios.post(
+        `${BASE_URL}/location/locations`,
+        api1Payload,
+        {
+          headers: {
+            accept:
+              "application/com.c2c.telemetry.location.dto.v1.response.locationresponse.v1+json",
+            "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
+            "x-requestor": "test",
+            "Content-Type":
+              "application/com.c2c.telemetry.location.dto.v1.request.locationrequestnew.v1+json",
+          },
+        }
+      );
+
+      const geoId = api1Response.data?.responseData?.geoId;
+
+      if (!geoId) {
+        throw new Error("Failed to retrieve geoId from API 1 response");
+      }
+
+      const api2Payload = {
+        mapping: [
+          {
+            schedule: {},
+            notification: notification,
+            isEdgeEnabled: 1,
+            ruleId: 0,
+            isActive: true,
+            ruleExpression: "string",
+            name: name,
+            systemId: systemId,
+          },
+        ],
+      };
+
+      const api2Response = await axios.post(
+        `${BASE_URL}/location/vehicles/geo-fences/${geoId}`,
+        api2Payload,
+        {
+          headers: {
+            accept:
+              "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
+            "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
+            "x-requestor": "test",
+            "Content-Type":
+              "application/com.c2c.telemetry.location.dto.v1.request.addtelemetrylocationdetailsrequestnew.v1+json",
+          },
+        }
+      );
+
+      const api2GeofenceMappings = api2Response.data?.geofenceMappings?.map(mapping => ({
+        systemId: mapping.systemId,
+        vehicleMappingId: mapping.vehicleMappingId,
+        message: mapping.message,
+      }));
+
+      return {
+        api1: api1Response.data,
+        api2: { geofenceMappings: api2GeofenceMappings },
+      };
+    } catch (error) {
+      console.error("Error in aggregateGeofence:", error);
+      return {
+        message: error.message || "An error occurred",
+      };
+    }
+  },
+  getGeoFences: async ({ systemId }) => {
+    try {
+      const response = await axios.get(`${BASE_URL}/location/vehicles/${systemId}/geo-fences`, {
         headers: {
           "accept": "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
           "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
-          "x-requestor": "test",
-          "Content-Type": "application/com.c2c.telemetry.location.dto.v1.request.addtelemetrylocationdetailsrequestnew.v1+json"
-        }
-      }
-    );
-
-    // Combine responses
-    const combinedResponse = {
-      api1: api1Response.data,
-      api2: api2Response.data
-    };
-
-    return combinedResponse;
-  },
-  getGeoFences: async ({ systemId }) => {
-    // Call the fetch geo-fences API
-    const response = await axios.get(`https://cbp-eu-uat.royalenfield.com/location/vehicles/${systemId}/geo-fences?offset=1&limit=10&isActive=true`, {
-      headers: {
-        "accept": "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
-        "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
-        "x-requestor": "test"
-      }
-    });
-
-    return response.data;
-  },
-  updateGeofence: async ({ geoId, name, radius, coordinates }) => {
-    // Construct payload for API 1
-    const api1Payload = {
-      name: name,
-      geometryType: "circle",
-      radius: radius,
-      coordinates: coordinates,
-      isActive: true,
-      tolerance: 0,
-      type: "personal",
-      isPOI: true,
-      tag: "Office"
-    };
-
-    // Call API 1
-    const api1Response = await axios.put(
-      `https://cbp-eu-uat.royalenfield.com/location/locations/${geoId}`,
-      api1Payload,
-      {
-        headers: {
-          "accept": "application/com.c2c.telemetry.location.dto.v1.response.locationresponse.v1+json",
-          "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
-          "x-requestor": "test",
-          "Content-Type": "application/com.c2c.telemetry.location.dto.v1.request.locationrequestnew.v1+json"
-        }
-      }
-    );
-
-    return api1Response.data;
-  },
-  deleteGeofence: async ({ geoId }) => {
-    // Call API 1
-    const api1Response = await axios.delete(
-      `https://cbp-eu-uat.royalenfield.com/location/locations/${geoId}?isPOI=true`,
-      {
-        headers: {
-          "accept": "application/com.c2c.telemetry.location.dto.v1.response.locationresponsedata.v1+json",
-          "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
           "x-requestor": "test"
         }
-      }
-    );
+      });
 
-    return "Geofence deleted successfully";
+      return response.data;
+    } catch (error) {
+      console.error("Error in getGeoFences:", error);
+      return {
+        message: error.message || "An error occurred",
+      };
+    }
+  },
+    updateGeofence: async ({ geoId, name, radius, coordinates}) => {
+    try {
+      // Construct payload for API 1
+      const api1Payload = {
+        name: name,
+        geometryType: "circle",
+        radius: radius,
+        coordinates: coordinates,
+        isActive: true,
+        tolerance: 0,
+        type: "personal",
+        isPOI: true,
+        tag: "Office"
+      };
+
+      // Call API 1
+      const api1Response = await axios.put(
+        `${BASE_URL}/location/locations/${geoId}`,
+        api1Payload,
+        {
+          headers: {
+            "accept": "application/com.c2c.telemetry.location.dto.v1.response.locationresponse.v1+json",
+            "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
+            "x-requestor": "test",
+            "Content-Type": "application/com.c2c.telemetry.location.dto.v1.request.locationrequestnew.v1+json"
+          }
+        }
+      );
+
+      return api1Response.data;
+    } catch (error) {
+      console.error("Error in updateGeofence:", error);
+      return {
+        message: error.message || "An error occurred",
+      };
+    }
+  },
+  deleteGeofence: async ({ geoId }) => {
+    try {
+      // Call API 1
+      const api1Response = await axios.delete(
+        `${BASE_URL}/location/locations/${geoId}?isPOI=true`,
+        {
+          headers: {
+            "accept": "application/com.c2c.telemetry.location.dto.v1.response.locationresponsedata.v1+json",
+            "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
+            "x-requestor": "test"
+          }
+        }
+      );
+
+      return { message: api1Response.data.message };
+    } catch (error) {
+      console.error("Error in deleteGeofence:", error);
+      return {
+        message: error.message || "An error occurred",
+      };
+    }
   }
 };
 
