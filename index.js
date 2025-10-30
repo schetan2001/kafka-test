@@ -21,7 +21,7 @@ const getAccessToken = async () => {
     const response = await axios.post('https://mc3snfg-sfh7x8jmy5gw1rdk4zbq.auth.marketingcloudapis.com/v2/token', {
       grant_type: 'client_credentials',
       client_id: process.env.CLIENT_ID,
-      client_secret: process.env.CLIENT_SECRET
+      client_secret: process.env.CLIENT_ID
     });
 
     cachedToken = response.data.access_token;
