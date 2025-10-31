@@ -3,8 +3,8 @@ const { Kafka } = require("kafkajs");
 const axios = require("axios");
 
 // Constants
-const KAFKA_BROKER = process.env.KAFKA_BROKER;
-const SOURCE_TOPIC = process.env.SOURCE_TOPIC;
+const KAFKA_BROKER = process.env.KAFKA_BROKER || "localhost:9092";
+const SOURCE_TOPIC = process.env.SOURCE_TOPIC || "notification-topic";
 const EMAIL_API_ENDPOINT = "https://mc3snfg-sfh7x8jmy5gw1rdk4zbq.rest.marketingcloudapis.com/messaging/v1/email/messages";
 const SMS_API_ENDPOINT = "https://mc3snfg-sfh7x8jmy5gw1rdk4zbq.rest.marketingcloudapis.com/sms/v1/messageContact/NzcwMzo3ODow/send";
 const TOKEN_ENDPOINT = "https://mc3snfg-sfh7x8jmy5gw1rdk4zbq.auth.marketingcloudapis.com/v2/token";
@@ -166,7 +166,7 @@ const processMessage = async (message) => {
 const startKafkaProcessing = async () => {
   try {
     await consumer.connect();
-    await consumer.subscribe({ topic: SOURCE_TOPIC, fromBeginning: true });
+    await consumer.subscribe({ topic: SOURCE_TOPIC, fromBeginning: false });
     await consumer.run({
       eachMessage: async ({ message }) => {
         await processMessage(message);
