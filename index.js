@@ -174,12 +174,18 @@ app.get("/aggregate", async (req, res) => {
           timeout: 10000
         });
         
+        // Update the section where we handle search in the requests map
         if (config.enableSearch && searchQuery && response.data?.responseData?.vehicleDetails) {
-          const searchKeys = config.keys.split(',').map(k => k.trim());
+          // Get all search keys from all key groups
+          const allSearchKeys = config.keys.split(' - ')
+            .map(group => group.split(',').map(k => k.trim()))
+            .flat()
+            .filter(key => key !== 'offset' && key !== 'limit' && key !== 'totalRecords');
+
           const filteredData = searchInData(
             response.data.responseData.vehicleDetails,
             searchQuery,
-            searchKeys
+            allSearchKeys
           );
           
           response.data.responseData.vehicleDetails = filteredData;
