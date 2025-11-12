@@ -55,10 +55,10 @@ const schema = buildSchema(`
   input CustomModeSettingsInput {
     anti_lock_brakes: String
     traction_control: String
-    power_output: Int
-    torque_map: Int
-    regen_coast: Int
-    regen_braking: Int
+    power_output: String
+    torque_map: String
+    regen_coast: String
+    regen_braking: String
   }
 
   scalar JSON
