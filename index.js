@@ -8,7 +8,8 @@ dotenv.config();
 
 const app = express();
 
-const INGRESS_API_KEY = process.env.API_KEY || '47629e22-f0d7-4af0-bab9-559689ef24ee';
+const INGRESS_API_KEY = process.env.API_KEY;
+const BASE_URL = process.env.BASE_URL;
 
 // Middleware for API Key verification
 app.use("/package-download", (req, res, next) => {
@@ -16,7 +17,9 @@ app.use("/package-download", (req, res, next) => {
 
   if (!INGRESS_API_KEY) {
     console.error("INGRESS_API_KEY is not defined in the environment.");
-    return res.status(500).json({ error: "Server configuration error: Missing API key." });
+    return res
+      .status(500)
+      .json({ error: "Server configuration error: Missing API key." });
   }
 
   if (!apiKey || apiKey !== INGRESS_API_KEY) {
@@ -33,8 +36,8 @@ const schema = buildSchema(`
   }
 
   type EligiblePackageResponse {
-    message: String
-    ecuPackageDetail: EcuPackageDetail
+  message: String
+  ecuPackageDetail: EcuPackageDetail
   }
 
   type EcuPackageDetail {
@@ -74,16 +77,19 @@ const root = {
   getEligiblePackage: async ({ systemId }) => {
     try {
       const response = await axios.get(
-        `https://cbp-eu-uat.royalenfield.com/ota/campaign-manager/vehicles/${systemId}/ecus/versions/eligible?ecuName=composite&partNumber=585`,
+        `${BASE_URL}/ota/campaign-manager/vehicles/${systemId}/ecus/versions/eligible?ecuName=composite&partNumber=585`,
         {
           headers: {
             accept: "*/*",
             "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
-            "x-requestor": "admin",
+            "x-requestor": "fota",
           },
         }
       );
-      return response.data;
+      return {
+        message: response.data?.message || "",
+        ecuPackageDetail: response.data?.ecuPackageDetail || [],
+      };
     } catch (error) {
       console.error(error);
       throw new Error("Failed to fetch eligible package");
@@ -92,12 +98,12 @@ const root = {
   downloadPackage: async ({ packageId }) => {
     try {
       const response = await axios.get(
-        `https://cbp-eu-uat.royalenfield.com/ota/campaign-manager/packages/${packageId}/download-package`,
+        `${BASE_URL}/ota/campaign-manager/packages/${packageId}/download-package`,
         {
           headers: {
             accept: "*/*",
             "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
-            "x-requestor": "admin",
+            "x-requestor": "fota",
           },
         }
       );
@@ -119,7 +125,7 @@ app.use(
   })
 );
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 4005;
 app.listen(PORT, () => {
   console.log(`GraphQL server listening on port ${PORT}`);
 });
