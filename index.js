@@ -31,46 +31,11 @@ app.use("/package-download", (req, res, next) => {
 
 const schema = buildSchema(`
   type Query {
-    getEligiblePackage(systemId: String!): EligiblePackageResponse
-    downloadPackage(packageId: String!): DownloadPackageResponse
+    getEligiblePackage(systemId: String!): JSON
+    downloadPackage(packageId: String!): JSON
   }
 
-  type EligiblePackageResponse {
-  message: String
-  ecuPackageDetail: EcuPackageDetail
-  }
-
-  type EcuPackageDetail {
-    packageId: String
-    packageName: String
-    fileName: String
-    model: String
-    ecuName: String
-    packageType: Int
-    targetVersion: String
-    sourceVersion: String
-    partNumber: String
-    updateType: String
-    checksum: String
-    partCode: String
-    hardwareVersion: String
-    planTime: String
-  }
-
-  type DownloadPackageResponse {
-    message: String
-    packageInfo: PackageInfo
-  }
-
-  type PackageInfo {
-    downloadUrl: String
-    security: SecurityInfo
-  }
-
-  type SecurityInfo {
-    signature: String
-    certificate: String
-  }
+  scalar JSON
 `);
 
 const root = {
@@ -86,13 +51,12 @@ const root = {
           },
         }
       );
-      return {
-        message: response.data?.message || "",
-        ecuPackageDetail: response.data?.ecuPackageDetail || [],
-      };
+      return response.data;
     } catch (error) {
-      console.error(error);
-      throw new Error("Failed to fetch eligible package");
+      if (error.response && error.response.data) {
+        return error.response.data;
+      }
+      return { message: error.message };
     }
   },
   downloadPackage: async ({ packageId }) => {
@@ -109,8 +73,10 @@ const root = {
       );
       return response.data;
     } catch (error) {
-      console.error(error);
-      throw new Error("Failed to download package");
+      if (error.response && error.response.data) {
+        return error.response.data;
+      }
+      return { message: error.message };
     }
   },
 };
