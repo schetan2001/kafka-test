@@ -83,7 +83,7 @@ const root = {
   }) => {
     try {
       const timestamp = Date.now();
-      const dynamicName = `${name}${timestamp}${systemId}`;
+      const dynamicName = `${name}${timestamp}`;
 
       const api1Payload = {
         name: dynamicName,
@@ -151,7 +151,6 @@ const root = {
       const api2Data = api2Response.data;
       let geofenceStatus = null;
 
-      // Check if API 2 response indicates initiation
       if (
         api2Response.status === 200 &&
         api2Data?.geofenceMappings?.[0]?.message
