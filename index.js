@@ -161,6 +161,7 @@ const schema = buildSchema(`
   type CampaignVersionResponse {
     currentVersion: String
     targetVersion: String
+    timestamp: Float
   }
 `);
 
@@ -491,7 +492,7 @@ const root = {
           ),
           vehicleRange: extractSignalValue(
             signals,
-            "Display_info__Vehicle_Range_RX_V"
+            "Range_Info__DTE_Range_RX_V"
           ),
           batterySoc: extractSignalValue(
             signals,
@@ -602,7 +603,6 @@ const root = {
         }
       }
 
-      // Get target version
       let targetVersion = null;
       try {
         const targetVersionResponse = await axios.get(
@@ -631,6 +631,7 @@ const root = {
       return {
         currentVersion,
         targetVersion,
+        timestamp: Date.now()
       };
     } catch (error) {
       console.error("Error fetching campaign versions:", error);
