@@ -12,6 +12,7 @@ app.use(express.json());
 const corsOptions = {
   origin: [
     "https://tap-sit.royalenfield.com",
+    "https://wingman-portal-preprod.royalenfield.com",
     "http://localhost:3000",
     "http://localhost:3001",
   ],
