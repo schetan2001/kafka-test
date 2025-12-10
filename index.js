@@ -1,7 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const multer = require("multer");
-const cors = require("cors");
+const cors = require("cors"); // Import the cors middleware
 require("dotenv").config();
 
 const SERVER_PORT = process.env.SERVER_PORT;
@@ -58,7 +58,7 @@ app.post("/upload-package", upload.single("file"), async (req, res) => {
   // STEP 1: Get the Presigned URL
   let presignedUrl;
   try {
-    const getUrl = `${CAMPAIGN_MANAGER_BASE_URL}/files/${model}/${ECU_NAME}/${packageName}/${fileName}?action=UPLOAD`;
+    const getUrl = `${CAMPAIGN_MANAGER_BASE_URL}/ota/campaign-manager/files/${model}/${ECU_NAME}/${packageName}/${fileName}?action=UPLOAD`;
 
     console.log(`Step 1: Requesting presigned URL from: ${getUrl}`);
 
@@ -152,7 +152,7 @@ app.post("/upload-package", upload.single("file"), async (req, res) => {
 
   // STEP 3: Register the Package with Campaign Manager (POST)
   try {
-    const registerUrl = `${CAMPAIGN_MANAGER_BASE_URL}/packages`;
+    const registerUrl = `${CAMPAIGN_MANAGER_BASE_URL}/ota/campaign-manager/packages`;
     console.log(
       `Step 3: Registering package with Campaign Manager at: ${registerUrl}`
     );
