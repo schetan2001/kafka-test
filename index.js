@@ -1,7 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const multer = require("multer");
-const cors = require("cors");
+const cors = require("cors"); // Import the cors middleware
 require("dotenv").config();
 
 const SERVER_PORT = process.env.SERVER_PORT;
@@ -16,6 +16,7 @@ const app = express();
 const corsOptions = {
   origin: [
     "https://tap-sit.royalenfield.com",
+    "https://wingman-portal-preprod.royalenfield.com",
     "http://localhost:3000",
     "http://localhost:3001",
   ],
