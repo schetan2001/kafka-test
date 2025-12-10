@@ -1,7 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const multer = require("multer");
-const cors = require("cors"); // Import the cors middleware
+const cors = require("cors");
 require("dotenv").config();
 
 const SERVER_PORT = process.env.SERVER_PORT;
@@ -67,7 +67,7 @@ app.post("/upload-package", upload.single("file"), async (req, res) => {
         Accept: "*/*",
         accept: "*/*",
         "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
-        "x-requestor": "fota",
+        "x-requestor": "admin",
       },
     });
 
@@ -166,6 +166,7 @@ app.post("/upload-package", upload.single("file"), async (req, res) => {
       targetVersion: targetVersion,
       partNumber: "585",
       updateType: "fota",
+      tagName: "CONDENSEUPLOAD"
     };
 
     const registrationResponse = await axios.post(
