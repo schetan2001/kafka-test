@@ -12,7 +12,8 @@ const API_KEY = process.env.API_KEY;
 const ECU_NAME = "composite";
 
 const app = express();
-
+app.use(express.json({ limit: "10gb" }));
+app.use(express.urlencoded({ limit: "10gb", extended: true }));
 const corsOptions = {
   origin: [
     "https://tap-sit.royalenfield.com",
