@@ -42,11 +42,23 @@ const schema = buildSchema(`
     getLastParkedLocation(systemId: String!): JSON
     getVehicleMetadata(systemId: String!): VehicleMetadataResponse
     getVehicleHealthStatus(systemId: String!): VehicleHealthStatusResponse
+    getCampaignVersions(systemId: String!): CampaignVersionResponse
   }
 
   type Mutation {
     updateLockUnlock(systemId: String!, name: String!, value: Int!): JSON
-    updateVehicleRideMode(systemId: String!, startTime: Float, endTime: Float, modeType: String!, mode: String!, enabled: Boolean): JSON
+    updateRideMode(systemId: String!, mode: String!): JSON
+    updateCustomMode(systemId: String!, settings: CustomModeSettingsInput!): JSON
+    updateVehicleMode(systemId: String!, mode: String!, enabled: Boolean!, startTime: Float, endTime: Float): JSON
+  }
+
+  input CustomModeSettingsInput {
+    anti_lock_brakes: String
+    traction_control: String
+    power_output: String
+    torque_map: String
+    regen_coast: String
+    regen_braking: String
   }
 
   scalar JSON
@@ -108,7 +120,7 @@ const schema = buildSchema(`
     longitudeDirection: String
     gpsStatus: String
     gpsFixValue: String
-    mcuRideMode: String
+    rideMode: String
     absState: String
     chargingMode: String
     vehicleRange: String
@@ -118,6 +130,11 @@ const schema = buildSchema(`
     lockStatus: String
     timeToChargeHrs: String
     timeToChargeMins: String
+    absSensitivity: String
+    powerOutputControl: String
+    torqueMapControl: String
+    regenCoastControl: String
+    regenBrakeControl: String
     updatedTime: String
   }
 
@@ -139,6 +156,12 @@ const schema = buildSchema(`
 
   type VehicleHealthStatusResponse {
     vehicleStatus: String
+  }
+
+  type CampaignVersionResponse {
+    currentVersion: String
+    targetVersion: String
+    timestamp: Float
   }
 `);
 
@@ -455,7 +478,7 @@ const root = {
           longitudeDirection: extractSignalValue(signals, "AL_LONG_DIR"),
           gpsStatus: extractSignalValue(signals, "AL_GPS_STATUS"),
           gpsFixValue: extractSignalValue(signals, "AL_GPS_FIX"),
-          mcuRideMode: extractSignalValue(
+          rideMode: extractSignalValue(
             signals,
             "MCU_Data_2__MCU_Ride_Modes_RX_V"
           ),
@@ -469,7 +492,7 @@ const root = {
           ),
           vehicleRange: extractSignalValue(
             signals,
-            "Display_info__Vehicle_Range_RX_V"
+            "Range_Info__DTE_Range_RX_V"
           ),
           batterySoc: extractSignalValue(
             signals,
@@ -488,6 +511,26 @@ const root = {
           timeToChargeMins: extractSignalValue(
             signals,
             "Batt_Limits__Time_to_Chrg_Mins_RX_V"
+          ),
+          absSensitivity: extractSignalValue(
+            signals,
+            "SOM_Settings_Data__ABS_Sensitivity_Sel_TX_V"
+          ),
+          powerOutputControl: extractSignalValue(
+            signals,
+            "Custom_Mode__Power_Output_Control_TX_V"
+          ),
+          torqueMapControl: extractSignalValue(
+            signals,
+            "Custom_Mode__Torque_Map_Control_TX_V"
+          ),
+          regenCoastControl: extractSignalValue(
+            signals,
+            "Custom_Mode__Regen_Coast_Control_TX_V"
+          ),
+          regenBrakeControl: extractSignalValue(
+            signals,
+            "Custom_Mode__Regen_Brake_Control_TX_V"
           ),
           updatedTime: updatedTime,
         };
@@ -536,6 +579,65 @@ const root = {
       return error.response?.data || { message: error.message };
     }
   },
+  getCampaignVersions: async ({ systemId }) => {
+    try {
+      // Get current version
+      const currentVersionResponse = await axios.get(
+        `${BASE_URL}/ota/campaign-manager/vehicles/${systemId}`,
+        {
+          headers: {
+            accept: "*/*",
+            "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
+            "x-requestor": "admin",
+          },
+        }
+      );
+
+      let currentVersion = null;
+      if (currentVersionResponse.data?.vehicle?.ecus) {
+        const compositeEcu = currentVersionResponse.data.vehicle.ecus.find(
+          (ecu) => ecu.ecuName === "composite"
+        );
+        if (compositeEcu?.ecuChipsetInfos?.[0]) {
+          currentVersion = compositeEcu.ecuChipsetInfos[0].currentVersion;
+        }
+      }
+
+      let targetVersion = null;
+      try {
+        const targetVersionResponse = await axios.get(
+          `${BASE_URL}/ota/campaign-manager/vehicles/${systemId}/ecus/versions/eligible?ecuName=composite&partNumber=585`,
+          {
+            headers: {
+              accept: "*/*",
+              "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
+              "x-requestor": "admin",
+            },
+          }
+        );
+
+        if (targetVersionResponse.data?.ecuPackageDetail?.targetVersion) {
+          targetVersion =
+            targetVersionResponse.data.ecuPackageDetail.targetVersion;
+        }
+      } catch (error) {
+        if (error.response?.data?.errors?.[0]?.code === "21144") {
+          targetVersion = "No update available";
+        } else {
+          throw error;
+        }
+      }
+
+      return {
+        currentVersion,
+        targetVersion,
+        timestamp: Date.now()
+      };
+    } catch (error) {
+      console.error("Error fetching campaign versions:", error);
+      throw new Error("Failed to fetch campaign versions");
+    }
+  },
   updateLockUnlock: async ({ systemId, name, value }) => {
     try {
       const response = await axios.post(
@@ -568,40 +670,108 @@ const root = {
     }
   },
 
-  updateVehicleRideMode: async ({
-    systemId,
-    startTime,
-    endTime,
-    modeType,
-    mode,
-    enabled,
-  }) => {
+  updateRideMode: async ({ systemId, mode }) => {
     try {
-      const dynamicPath = `vehicle_settings.${modeType}.${mode}`;
       const url = `${BASE_URL}/cota-service/vehicle-configurations/update`;
-
       const payload = {
         updates: [
           {
             action: "EDIT",
-            path: dynamicPath,
-            value: { enabled: enabled, startTime: startTime, endTime: endTime },
+            path: "vehicle_settings.vehicle_features.ride_mode",
+            value: mode,
           },
         ],
         systemIds: [systemId],
       };
-
       const headers = {
         "Content-Type": "application/json",
         "api-key": COTA_API_KEY,
         "x-requestor": "test",
       };
-
       const response = await axios.post(url, payload, { headers });
       return response.data;
     } catch (error) {
       console.error(
-        "Error updating vehicle ride mode:",
+        "Error updating ride mode:",
+        error.response?.data || error.message
+      );
+      return error.response?.data || { message: error.message };
+    }
+  },
+
+  updateCustomMode: async ({ systemId, settings }) => {
+    try {
+      // Validate that at least one setting is provided
+      if (Object.keys(settings).length === 0) {
+        throw new Error("At least one custom mode setting must be provided.");
+      }
+
+      const url = `${BASE_URL}/cota-service/vehicle-configurations/update`;
+      const payload = {
+        updates: [
+          {
+            action: "EDIT",
+            path: "vehicle_settings.vehicle_features.custom_ride_mode",
+            value: settings,
+          },
+        ],
+        systemIds: [systemId],
+      };
+      const headers = {
+        "Content-Type": "application/json",
+        "api-key": COTA_API_KEY,
+        "x-requestor": "test",
+      };
+      const response = await axios.post(url, payload, { headers });
+      return response.data;
+    } catch (error) {
+      console.error(
+        "Error updating custom mode:",
+        error.response?.data || error.message
+      );
+      return error.response?.data || { message: error.message };
+    }
+  },
+
+  updateVehicleMode: async ({
+    systemId,
+    mode,
+    enabled,
+    startTime,
+    endTime,
+  }) => {
+    try {
+      const url = `${BASE_URL}/cota-service/vehicle-configurations/update`;
+      const valuePayload = { enabled };
+
+      // Conditionally add start and end times if they are provided
+      if (startTime) {
+        valuePayload.start_time = startTime;
+      }
+      if (endTime) {
+        valuePayload.end_time = endTime;
+      }
+
+      const payload = {
+        updates: [
+          {
+            action: "EDIT",
+            path: `vehicle_settings.vehicle_mode.${mode}`,
+            value: valuePayload,
+          },
+        ],
+        systemIds: [systemId],
+      };
+      const headers = {
+        "Content-Type": "application/json",
+        "api-key": COTA_API_KEY,
+        "x-requestor": "test",
+      };
+      const response = await axios.post(url, payload, { headers });
+      return response.data;
+    } catch (error) {
+      console.error(
+        "Error updating vehicle mode:",
         error.response?.data || error.message
       );
       return error.response?.data || { message: error.message };
