@@ -40,21 +40,18 @@ async function handleKafkaMessage(payload) {
   }
 
   try {
-    // Get the token once for the entire batch of tickets.
     const token = await getAccessToken();
     const headers = {
-      Accept: "application/vnd.manageengine.sdp.v3+json",
-      Authorization: `Zoho-oauthtoken ${token}`
+      'Accept': 'application/vnd.manageengine.sdp.v3+json',
+      'Authorization': `Zoho-oauthtoken ${token}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
     };
 
     console.log(`Processing ${dtcSnapshot.length} DTC(s) for systemId: ${systemId}`);
 
-    // Loop through each DTC and create a separate ticket.
     for (const dtc of dtcSnapshot) {
-      // 1. Create a unique subject for each ticket
       const subject = `DTC Alert: ${dtc.dtcCode} for System ID ${systemId}`;
 
-      // 2. Build a detailed description for this specific DTC
       const description = `A new diagnostic alert has been triggered for vehicle: <b>${systemId}</b>.<br><br>` +
                           `<b>Time of Alert:</b> ${new Date(timestamp).toUTCString()}<br>` +
                           `<b>DTC Code:</b> ${dtc.dtcCode}<br>` +
@@ -62,20 +59,24 @@ async function handleKafkaMessage(payload) {
                           `<b>Status:</b> ${dtc.status}<br>` +
                           `<b>Trigger Signal:</b> ${dtc.triggerSignal} (Value: ${dtc.triggerValue})<br>`;
 
-      // 3. Construct the final payload for the ManageEngine API
-      const ticketPayload = {
+      const ticketJsonPayload = {
         request: {
           subject: subject,
           description: description,
           requester: {
-            name: "Cloud Diagnostic Engine"
+            email_id: "schetan@royalenfield.com"
+          },
+          template: {
+            name: "Freshdesk"
           }
         }
       };
 
-      // 4. Create the individual ticket
+      const formData = new URLSearchParams();
+      formData.append('input_data', JSON.stringify(ticketJsonPayload));
+
       try {
-        const response = await axios.post(TICKET_API_URL, ticketPayload, { headers });
+        const response = await axios.post(TICKET_API_URL, formData, { headers });
         console.log(`  - Successfully created ticket for ${dtc.dtcCode}. Ticket ID: ${response.data.request.id}`);
       } catch (ticketError) {
         console.error(`  - Failed to create ticket for ${dtc.dtcCode}:`, ticketError.response?.data || ticketError.message);
