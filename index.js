@@ -69,12 +69,6 @@ async function handleKafkaMessage(payload) {
           description: description,
           requester: {
             name: "Cloud Diagnostic Engine"
-          },
-          priority: {
-            name: "High"
-          },
-          category: {
-            name: "Vehicle Alerts"
           }
         }
       };
