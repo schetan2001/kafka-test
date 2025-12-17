@@ -11,7 +11,7 @@ const TOKEN_API_URL = "https://accounts.zoho.in/oauth/v2/token?refresh_token=100
 const TOKEN_HEADERS = {
   Cookie: "_zcsr_tmp=dd6b6ad5-2b4d-428a-9761-f782ffa72c05; iamcsr=dd6b6ad5-2b4d-428a-9761-f782ffa72c05; zalb_6e73717622=dea4bb29906843a6fbdf3bd5c0e43d1d"
 };
-const TICKET_API_URL = "https://sdpondemand.manageengine.in/app/itdesk/api/v3/requests";
+const TICKET_API_URL = "https://sdpondemand.manageengine.in/app/sandbox_60023490885_100725_iax/api/v3/requests";
 
 let accessToken = null;
 let tokenExpiry = null;
@@ -26,17 +26,69 @@ async function getAccessToken() {
   return accessToken;
 }
 
+/**
+ * Processes a Kafka message and creates an individual ticket for each DTC
+ * found in the dtcSnapshot array.
+ * @param {object} payload - The raw JSON payload from the Kafka message.
+ */
 async function handleKafkaMessage(payload) {
+  const { systemId, dtcSnapshot, timestamp } = payload;
+
+  if (!systemId || !Array.isArray(dtcSnapshot) || dtcSnapshot.length === 0) {
+    console.warn("Skipping message: Invalid format or empty dtcSnapshot.", payload);
+    return;
+  }
+
   try {
+    // Get the token once for the entire batch of tickets.
     const token = await getAccessToken();
     const headers = {
       Accept: "application/vnd.manageengine.sdp.v3+json",
       Authorization: `Zoho-oauthtoken ${token}`
     };
-    const response = await axios.post(TICKET_API_URL, payload, { headers });
-    console.log("Ticket created:", response.data);
+
+    console.log(`Processing ${dtcSnapshot.length} DTC(s) for systemId: ${systemId}`);
+
+    // Loop through each DTC and create a separate ticket.
+    for (const dtc of dtcSnapshot) {
+      // 1. Create a unique subject for each ticket
+      const subject = `DTC Alert: ${dtc.dtcCode} for System ID ${systemId}`;
+
+      // 2. Build a detailed description for this specific DTC
+      const description = `A new diagnostic alert has been triggered for vehicle: <b>${systemId}</b>.<br><br>` +
+                          `<b>Time of Alert:</b> ${new Date(timestamp).toUTCString()}<br>` +
+                          `<b>DTC Code:</b> ${dtc.dtcCode}<br>` +
+                          `<b>Description:</b> ${dtc.dtcDescription}<br>` +
+                          `<b>Status:</b> ${dtc.status}<br>` +
+                          `<b>Trigger Signal:</b> ${dtc.triggerSignal} (Value: ${dtc.triggerValue})<br>`;
+
+      // 3. Construct the final payload for the ManageEngine API
+      const ticketPayload = {
+        request: {
+          subject: subject,
+          description: description,
+          requester: {
+            name: "Cloud Diagnostic Engine"
+          },
+          priority: {
+            name: "High"
+          },
+          category: {
+            name: "Vehicle Alerts"
+          }
+        }
+      };
+
+      // 4. Create the individual ticket
+      try {
+        const response = await axios.post(TICKET_API_URL, ticketPayload, { headers });
+        console.log(`  - Successfully created ticket for ${dtc.dtcCode}. Ticket ID: ${response.data.request.id}`);
+      } catch (ticketError) {
+        console.error(`  - Failed to create ticket for ${dtc.dtcCode}:`, ticketError.response?.data || ticketError.message);
+      }
+    }
   } catch (err) {
-    console.error("Error creating ticket:", err.response?.data || err.message);
+    console.error("A critical error occurred during ticket processing:", err.message);
   }
 }
 
