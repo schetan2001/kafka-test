@@ -1,123 +1,107 @@
 require("dotenv").config();
-const { ApolloServer } = require('@apollo/server');
-const { expressMiddleware } = require('@apollo/server/express4');
-const { ApolloServerPluginDrainHttpServer } = require('@apollo/server/plugin/drainHttpServer');
-const { PubSub } = require("graphql-subscriptions");
-const express = require('express');
-const http = require('http');
-const { makeExecutableSchema } = require('@graphql-tools/schema');
-const { WebSocketServer } = require('ws');
-const { useServer } = require('graphql-ws/lib/use/ws');
-const { Client } = require('pg');
-const PGListen = require('pg-listen')
+const { Kafka } = require("kafkajs");
+const { Pool } = require("pg");
 
-const POSTGRES_HOST = process.env.POSTGRES_HOST || "localhost";
-const POSTGRES_PORT = process.env.POSTGRES_PORT || 5432;
-const POSTGRES_USER = process.env.POSTGRES_USER;
-const POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD;
-const POSTGRES_DB = process.env.POSTGRES_DB;
-const SERVER_PORT = process.env.SERVER_PORT || 4000;
+// --- Configuration ---
+const KAFKA_BROKER = process.env.KAFKA_BROKER;
+const KAFKA_OUTPUT_TOPIC = process.env.KAFKA_OUTPUT_TOPIC;
+const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS, 10);
+const POLL_COLUMN = "updated_at"; // The column used to detect new/updated rows.
 
-const pubsub = new PubSub();
+// --- PostgreSQL Client Pool ---
+const pgPool = new Pool({
+  host: process.env.POSTGRES_HOST,
+  port: process.env.POSTGRES_PORT,
+  user: process.env.POSTGRES_USER,
+  password: process.env.POSTGRES_PASSWORD,
+  database: process.env.POSTGRES_DB,
+});
 
-// ===== PostgreSQL setup =====
-const dbConfig = {
-  host: POSTGRES_HOST,
-  port: POSTGRES_PORT,
-  user: POSTGRES_USER,
-  password: POSTGRES_PASSWORD,
-  database: POSTGRES_DB,
-};
+// --- Kafka Producer ---
+const kafka = new Kafka({
+  clientId: "postgres-to-kafka-producer",
+  brokers: [KAFKA_BROKER],
+});
+const producer = kafka.producer();
 
-const client = new Client(dbConfig);
+// --- Main Application Logic ---
+let lastPollValue = new Date(0); // Start from the beginning of time.
 
-async function startPgListener() {
+/**
+ * Queries the database for new/updated rows and publishes them to Kafka.
+ */
+async function pollAndPublish() {
+  console.log(`Polling for rows in 'ota.t_campaign' where '${POLL_COLUMN}' > ${lastPollValue.toISOString()}`);
+  
   try {
-    await client.connect();
-    console.log('Connected to PostgreSQL');
+    const query = `SELECT * FROM ota.t_campaign WHERE ${POLL_COLUMN} > $1 ORDER BY ${POLL_COLUMN} ASC`;
+    const { rows } = await pgPool.query(query, [lastPollValue]);
 
-    const listener = new PGListen(dbConfig);
-    await listener.connect();
-    console.log('Listening for PostgreSQL notifications');
+    if (rows.length === 0) {
+      console.log("No new rows found.");
+      return;
+    }
 
-    listener.listenTo('my_table_updates');
+    console.log(`Found ${rows.length} new/updated row(s). Publishing to Kafka...`);
 
-    listener.on('notification', (notification) => {
-      console.log('Received notification:', notification);
-      pubsub.publish('POSTGRES_DATA', { postgresData: JSON.parse(notification.payload) });
+    const messages = rows.map(row => ({
+      key: String(row.id), // Assuming 'id' is the primary key for partitioning.
+      value: JSON.stringify(row),
+    }));
+
+    await producer.send({
+      topic: KAFKA_OUTPUT_TOPIC,
+      messages: messages,
     });
 
-    listener.on('error', (error) => {
-      console.error('PostgreSQL listener error:', error);
-    });
+    // Update the last poll value to the latest timestamp from the processed batch.
+    lastPollValue = rows[rows.length - 1][POLL_COLUMN];
+    console.log(`Successfully published ${rows.length} message(s). New poll value is ${lastPollValue.toISOString()}`);
 
-    await listener.waitForListen();
-  } catch (err) {
-    console.error("Error connecting to PostgreSQL:", err.message);
+  } catch (error) {
+    console.error("An error occurred during polling and publishing:", error);
   }
 }
 
-// ===== GraphQL setup =====
-const typeDefs = `
-  type DataType {
-    id: Int
-    name: String
-    value: String
+/**
+ * Starts the service, connects to dependencies, and begins the polling loop.
+ */
+async function startService() {
+  try {
+    // Connect to Kafka Producer
+    await producer.connect();
+    console.log("Kafka producer connected.");
+
+    // Test PostgreSQL connection
+    const client = await pgPool.connect();
+    console.log("PostgreSQL pool connected.");
+    client.release();
+
+    // Start the polling loop
+    console.log(`Starting polling every ${POLL_INTERVAL_MS / 1000} seconds.`);
+    setInterval(pollAndPublish, POLL_INTERVAL_MS);
+
+  } catch (error) {
+    console.error("Failed to start the service:", error);
+    process.exit(1);
   }
-
-  type Query {
-    hello: String
-  }
-
-  type Subscription {
-    postgresData: DataType
-  }
-`;
-
-const resolvers = {
-  Query: {
-    hello: () => "Hello world!",
-  },
-  Subscription: {
-    postgresData: {
-      subscribe: () => pubsub.asyncIterator(["POSTGRES_DATA"]),
-    },
-  },
-};
-
-// Create schema, which will be passed to GraphQL WS and Apollo Server
-const schema = makeExecutableSchema({ typeDefs, resolvers });
-
-// Create an Express app and HTTP server;
-const app = express();
-const httpServer = http.createServer(app);
-
-// Set up WebSocket server using the schema
-const wsServer = new WebSocketServer({
-  server: httpServer,
-  path: '/',
-});
-
-useServer({ schema }, wsServer);
-
-// Set up Apollo Server
-const server = new ApolloServer({
-  schema,
-  plugins: [
-    // Proper shutdown for the HTTP server.
-    ApolloServerPluginDrainHttpServer({ httpServer }),
-  ],
-});
-
-// Start the server
-async function startApolloServer() {
-  await server.start();
-  app.use('/', express.json(), expressMiddleware(server));
-
-  httpServer.listen(SERVER_PORT, () => {
-    console.log(`Server is running on port ${SERVER_PORT}`);
-    startPgListener().catch(console.error);
-  });
 }
 
-startApolloServer();
+// --- Graceful Shutdown ---
+async function shutdown() {
+  console.log("Shutting down service...");
+  try {
+    await producer.disconnect();
+    await pgPool.end();
+    console.log("Service shut down gracefully.");
+  } catch (error) {
+    console.error("Error during shutdown:", error);
+  } finally {
+    process.exit(0);
+  }
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
+startService();
