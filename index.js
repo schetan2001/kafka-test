@@ -31,7 +31,7 @@ const consumer = kafka.consumer({ groupId: "dtc-processor-group" });
 const producer = kafka.producer();
 
 /**
- * Processes a raw Kafka message, identifies active DTCs, and builds a snapshot.
+ * Processes a raw Kafka message, identifies all relevant DTCs, and builds a snapshot.
  * @param {object} message - The raw Kafka message.
  */
 async function processMessage(message) {
@@ -55,32 +55,39 @@ async function processMessage(message) {
 
   // Iterate through each signal in the incoming message
   for (const signal of signals) {
-    // Check if a rule exists for this signal's ID and if its value indicates an error ("1")
-    if (dtcRules.has(signal.id) && String(signal.value) === "1") {
+    // Check if a rule exists for this signal's ID, regardless of its value.
+    if (dtcRules.has(signal.id)) {
       const rule = dtcRules.get(signal.id);
+      const signalValue = String(signal.value);
+
+      // Dynamically set the status based on the signal's value.
+      const status = signalValue === "1" ? "Active" : "Inactive";
 
       dtcSnapshot.push({
         dtcCode: rule.dtcCode,
         dtcDescription: rule.description,
-        status: "Active",
+        status: status,
         triggerSignal: signal.name,
-        triggerValue: String(signal.value),
+        triggerValue: signalValue,
       });
 
-      // Use the timestamp from the first triggering signal
+      // Use the timestamp from the first matching signal
       if (!eventTimestamp) {
         eventTimestamp = signal.updatedTime;
       }
     }
   }
 
-  // Only publish if at least one active DTC was found
+  // Only publish if at least one DTC (active or inactive) was found
   if (dtcSnapshot.length > 0) {
+    // Count how many of the found DTCs are actually active.
+    const activeDtcCount = dtcSnapshot.filter(dtc => dtc.status === "Active").length;
+
     const outputMessage = {
       systemId: systemId,
       timestamp: eventTimestamp || Date.now(), // Fallback to current time
       dtcSnapshot: dtcSnapshot,
-      activeDtcCount: dtcSnapshot.length,
+      activeDtcCount: activeDtcCount,
     };
 
     await producer.send({
@@ -88,7 +95,7 @@ async function processMessage(message) {
       messages: [{ value: JSON.stringify(outputMessage, null, 2) }],
     });
 
-    console.log(`Published ${outputMessage.activeDtcCount} active DTC(s) for systemId: ${systemId}`);
+    console.log(`Published snapshot with ${dtcSnapshot.length} total DTCs (${activeDtcCount} active) for systemId: ${systemId}`);
   }
 }
 
