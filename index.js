@@ -13,6 +13,9 @@ const connectionString = `postgresql://${process.env.POSTGRES_USER}:${process.en
 // --- PostgreSQL Client Pool ---
 const pgPool = new Pool({
   connectionString: connectionString,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
 // --- Kafka Producer ---
