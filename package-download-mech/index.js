@@ -17,7 +17,9 @@ app.use("/package-download", (req, res, next) => {
 
   if (!INGRESS_API_KEY) {
     console.error("INGRESS_API_KEY is not defined in the environment.");
-    return res.status(500).json({ error: "Server configuration error: Missing API key." });
+    return res
+      .status(500)
+      .json({ error: "Server configuration error: Missing API key." });
   }
 
   if (!apiKey || apiKey !== INGRESS_API_KEY) {
@@ -29,70 +31,34 @@ app.use("/package-download", (req, res, next) => {
 
 const schema = buildSchema(`
   type Query {
-    getEligiblePackage(systemId: String!): EligiblePackageResponse
-    downloadPackage(packageId: String!): DownloadPackageResponse
+    getEligiblePackage(systemId: String!): JSON
+    downloadPackage(packageId: String!): JSON
   }
 
-  type EligiblePackageResponse {
-  message: String
-  ecuPackageDetails: [EcuPackageDetail]
-  }
-
-  type EcuPackageDetail {
-    packageId: String
-    packageName: String
-    fileName: String
-    model: String
-    ecuName: String
-    packageType: Int
-    targetVersion: String
-    sourceVersion: String
-    partNumber: String
-    updateType: String
-    checksum: String
-    partCode: String
-    hardwareVersion: String
-    planTime: String
-  }
-
-  type DownloadPackageResponse {
-    message: String
-    packageInfo: PackageInfo
-  }
-
-  type PackageInfo {
-    downloadUrl: String
-    security: SecurityInfo
-  }
-
-  type SecurityInfo {
-    signature: String
-    certificate: String
-  }
+  scalar JSON
 `);
 
 const root = {
-getEligiblePackage: async ({ systemId }) => {
-  try {
-    const response = await axios.get(
-      `${BASE_URL}/ota/campaign-manager/vehicles/${systemId}/ecus/versions/eligible?ecuName=composite&partNumber=585`,
-      {
-        headers: {
-          accept: "*/*",
-          "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
-          "x-requestor": "fota",
-        },
+  getEligiblePackage: async ({ systemId }) => {
+    try {
+      const response = await axios.get(
+        `${BASE_URL}/ota/campaign-manager/vehicles/${systemId}/ecus/versions/eligible?ecuName=composite&partNumber=585`,
+        {
+          headers: {
+            accept: "*/*",
+            "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
+            "x-requestor": "fota",
+          },
+        }
+      );
+      return response.data;
+    } catch (error) {
+      if (error.response && error.response.data) {
+        return error.response.data;
       }
-    );
-    return {
-      message: response.data?.message || "",
-      ecuPackageDetails: response.data?.ecuPackageDetails || [],
-    };
-  } catch (error) {
-    console.error(error);
-    throw new Error("Failed to fetch eligible package");
-  }
-},
+      return { message: error.message };
+    }
+  },
   downloadPackage: async ({ packageId }) => {
     try {
       const response = await axios.get(
@@ -107,8 +73,10 @@ getEligiblePackage: async ({ systemId }) => {
       );
       return response.data;
     } catch (error) {
-      console.error(error);
-      throw new Error("Failed to download package");
+      if (error.response && error.response.data) {
+        return error.response.data;
+      }
+      return { message: error.message };
     }
   },
 };

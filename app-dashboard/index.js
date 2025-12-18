@@ -13,6 +13,7 @@ app.use(express.json());
 const corsOptions = {
   origin: [
     "https://tap-sit.royalenfield.com",
+    "https://wingman-portal-preprod.royalenfield.com",
     "http://localhost:3000",
     "http://localhost:3001",
   ],
@@ -124,6 +125,10 @@ const schema = buildSchema(`
     absState: String
     chargingMode: String
     vehicleRange: String
+    conservativeRange: String
+    averageRange: String
+    aggressiveRange: String
+    rangeGain: String
     batterySoc: String
     chargingStatus: String
     vehicleStatus: String
@@ -493,6 +498,22 @@ const root = {
           vehicleRange: extractSignalValue(
             signals,
             "Range_Info__DTE_Range_RX_V"
+          ),
+          conservativeRange: extractSignalValue(
+            signals,
+            "Range_Info__Cons_Range_RX_V"
+          ),
+          averageRange: extractSignalValue(
+            signals,
+            "Range_Info__Avg_Range_RX_V"
+          ),
+          aggressiveRange: extractSignalValue(
+            signals,
+            "Range_Info__Agg_Range_RX_V"
+          ),
+          rangeGain: extractSignalValue(
+            signals,
+            "Range_Info__Range_Gain_RX_V"
           ),
           batterySoc: extractSignalValue(
             signals,

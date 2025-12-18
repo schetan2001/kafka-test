@@ -7,25 +7,26 @@ require("dotenv").config();
 const SERVER_PORT = process.env.SERVER_PORT;
 const CAMPAIGN_MANAGER_BASE_URL =
   process.env.CAMPAIGN_MANAGER_BASE_URL ||
-  "https://cbp-eu-uat.royalenfield.com/ota/campaign-manager";
+  "https://cbp-in-preprod.royalenfield.com/ota/campaign-manager";
 const API_KEY = process.env.API_KEY;
 const ECU_NAME = "composite";
 
 const app = express();
-
-// Configure CORS
+app.use(express.json({ limit: "10gb" }));
+app.use(express.urlencoded({ limit: "10gb", extended: true }));
 const corsOptions = {
   origin: [
     "https://tap-sit.royalenfield.com",
+    "https://wingman-portal-preprod.royalenfield.com",
     "http://localhost:3000",
     "http://localhost:3001",
   ],
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-  credentials: true, // Allow cookies to be sent
-  allowedHeaders: ["Content-Type", "Authorization", "x-api-key"], // Add 'x-api-key' here
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
 };
 
-app.use(cors(corsOptions)); // Use the cors middleware with the options
+app.use(cors(corsOptions));
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
@@ -58,7 +59,7 @@ app.post("/upload-package", upload.single("file"), async (req, res) => {
   // STEP 1: Get the Presigned URL
   let presignedUrl;
   try {
-    const getUrl = `${CAMPAIGN_MANAGER_BASE_URL}/files/${model}/${ECU_NAME}/${packageName}/${fileName}?action=UPLOAD`;
+    const getUrl = `${CAMPAIGN_MANAGER_BASE_URL}/ota/campaign-manager/files/${model}/${ECU_NAME}/${packageName}/${fileName}?action=UPLOAD`;
 
     console.log(`Step 1: Requesting presigned URL from: ${getUrl}`);
 
@@ -67,7 +68,7 @@ app.post("/upload-package", upload.single("file"), async (req, res) => {
         Accept: "*/*",
         accept: "*/*",
         "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
-        "x-requestor": "fota",
+        "x-requestor": "admin",
       },
     });
 
@@ -152,7 +153,7 @@ app.post("/upload-package", upload.single("file"), async (req, res) => {
 
   // STEP 3: Register the Package with Campaign Manager (POST)
   try {
-    const registerUrl = `${CAMPAIGN_MANAGER_BASE_URL}/packages`;
+    const registerUrl = `${CAMPAIGN_MANAGER_BASE_URL}/ota/campaign-manager/packages`;
     console.log(
       `Step 3: Registering package with Campaign Manager at: ${registerUrl}`
     );
@@ -166,6 +167,7 @@ app.post("/upload-package", upload.single("file"), async (req, res) => {
       targetVersion: targetVersion,
       partNumber: "585",
       updateType: "fota",
+      tagName: "CONDENSEUPLOAD"
     };
 
     const registrationResponse = await axios.post(

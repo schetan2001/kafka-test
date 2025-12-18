@@ -1,14 +1,15 @@
 {
-  "name": "dynamic-api-aggregator",
+  "name": "circular-geofence",
   "version": "1.0.0",
-  "description": "Aggregates data from multiple APIs",
+  "description": "GraphQL API to manage circular geofences",
   "main": "index.js",
   "dependencies": {
     "express": "^5.1.0",
     "axios": "^1.11.0",
     "dotenv": "^16.6.1",
     "express-graphql": "^0.12.0",
-    "graphql": "^15.8.0"
+    "graphql": "^15.8.0",
+    "cors": "^2.8.5"
   },
   "devDependencies": {},
   "scripts": {

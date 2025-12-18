@@ -3,15 +3,19 @@ const { Kafka } = require("kafkajs");
 const axios = require("axios");
 const express = require("express");
 
+// --- Configuration ---
 const KAFKA_BROKER = process.env.KAFKA_BROKER || "localhost:9092";
 const KAFKA_TOPIC = process.env.KAFKA_TOPIC;
 const SERVER_PORT = process.env.SERVER_PORT || 4000;
-
+const TICKET_API_URL = "https://sdpondemand.manageengine.in/app/sandbox_60023490885_100725_iax/api/v3/requests";
 const TOKEN_API_URL = "https://accounts.zoho.in/oauth/v2/token?refresh_token=1000.de9f6a55b1bc15f3a7054cae27cbe897.efd51e07c78d8875ec84797452d45a26&grant_type=refresh_token&client_id=1000.JARQGYYRTK7II3HNYA24RJRTA3JYUU&client_secret=84fdafbd326346583d03075e0047368b594f8240da&redirect_uri=https%3A%2F%2Fsdpondemand.manageengine.in%2Fhome%2F&scope=SDPOnDemand.requests.CREATE";
 const TOKEN_HEADERS = {
   Cookie: "_zcsr_tmp=dd6b6ad5-2b4d-428a-9761-f782ffa72c05; iamcsr=dd6b6ad5-2b4d-428a-9761-f782ffa72c05; zalb_6e73717622=dea4bb29906843a6fbdf3bd5c0e43d1d"
 };
-const TICKET_API_URL = "https://sdpondemand.manageengine.in/app/itdesk/api/v3/requests";
+
+// --- In-Memory Cache for Deduplication ---
+const recentlyCreatedTickets = new Map();
+const TICKET_COOLDOWN_PERIOD_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 let accessToken = null;
 let tokenExpiry = null;
@@ -27,16 +31,69 @@ async function getAccessToken() {
 }
 
 async function handleKafkaMessage(payload) {
+  const { systemId, dtcSnapshot, timestamp } = payload;
+
+  if (!systemId || !Array.isArray(dtcSnapshot) || dtcSnapshot.length === 0) {
+    return;
+  }
+
   try {
     const token = await getAccessToken();
     const headers = {
-      Accept: "application/vnd.manageengine.sdp.v3+json",
-      Authorization: `Zoho-oauthtoken ${token}`
+      'Accept': 'application/vnd.manageengine.sdp.v3+json',
+      'Authorization': `Zoho-oauthtoken ${token}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
     };
-    const response = await axios.post(TICKET_API_URL, payload, { headers });
-    console.log("Ticket created:", response.data);
+
+    for (const dtc of dtcSnapshot) {
+      // Create a unique key for this specific fault instance.
+      const ticketKey = `${systemId}-${dtc.dtcCode}`;
+
+      // Check if a ticket was recently created for this exact fault.
+      if (recentlyCreatedTickets.has(ticketKey)) {
+        console.log(`  - Skipping duplicate DTC: ${dtc.dtcCode} for System ID ${systemId}. Ticket already created.`);
+        continue; // Skip to the next DTC in the message.
+      }
+
+      const subject = `DTC Alert: ${dtc.dtcCode} for System ID ${systemId}`;
+      const description = `A new diagnostic alert has been triggered for vehicle: <b>${systemId}</b>.<br><br>` +
+                          `<b>Time of Alert:</b> ${new Date(timestamp).toUTCString()}<br>` +
+                          `<b>DTC Code:</b> ${dtc.dtcCode}<br>` +
+                          `<b>Description:</b> ${dtc.dtcDescription}<br>` +
+                          `<b>Status:</b> ${dtc.status}<br>` +
+                          `<b>Trigger Signal:</b> ${dtc.triggerSignal} (Value: ${dtc.triggerValue})<br>`;
+
+      const ticketJsonPayload = {
+        request: {
+          subject: subject,
+          description: description,
+          requester: { email_id: "schetan@royalenfield.com" },
+          template: { name: "Freshdesk" }
+        }
+      };
+
+      const formData = new URLSearchParams();
+      formData.append('input_data', JSON.stringify(ticketJsonPayload));
+
+      try {
+        const response = await axios.post(TICKET_API_URL, formData, { headers });
+        console.log(`  - Successfully created ticket for ${dtc.dtcCode}. Ticket ID: ${response.data.request.id}`);
+
+        // Add the key to the cache to prevent duplicates.
+        recentlyCreatedTickets.set(ticketKey, Date.now());
+
+        // Set a timeout to automatically remove the key from the cache after the cooldown period.
+        setTimeout(() => {
+          recentlyCreatedTickets.delete(ticketKey);
+          console.log(`  - Cooldown expired for ${ticketKey}. A new ticket can now be created.`);
+        }, TICKET_COOLDOWN_PERIOD_MS);
+
+      } catch (ticketError) {
+        console.error(`  - Failed to create ticket for ${dtc.dtcCode}:`, ticketError.response?.data || ticketError.message);
+      }
+    }
   } catch (err) {
-    console.error("Error creating ticket:", err.response?.data || err.message);
+    console.error("A critical error occurred during ticket processing:", err.message);
   }
 }
 

@@ -7,7 +7,7 @@ const kafka = new Kafka({
   clientId: "smtp-kafka-email",
   brokers: [process.env.KAFKA_BROKER],
 });
-const consumer = kafka.consumer({ groupId: process.env.KAFKA_GROUP || "smtp-email-group" });
+const consumer = kafka.consumer({ groupId: "smtp-email-group" });
 
 // SMTP transporter
 const transporter = nodemailer.createTransport({
@@ -21,15 +21,20 @@ const transporter = nodemailer.createTransport({
 });
 
 async function sendLowBatteryEmail(systemId) {
+  const primaryTo = process.env.EMAIL_TO;
+  const secondaryTo = process.env.EMAIL_TO_2;
+
+  const recipients = secondaryTo ? [primaryTo, secondaryTo] : [primaryTo];
+
   const mailOptions = {
     from: process.env.EMAIL_FROM || "connectedassist@royalenfield.com",
-    to: process.env.EMAIL_TO,
+    to: recipients.join(","), // send to one or both
     subject: `Low Battery Alert - ${systemId}`,
     text: `System ID ${systemId} has reported a LOW BATTERY state.`,
   };
 
   const info = await transporter.sendMail(mailOptions);
-  console.log(`Email sent: ${info.messageId}`);
+  console.log(`Email sent: ${info.messageId} -> ${recipients.join(",")}`);
 }
 
 function isLowBatteryEvent(payload) {
