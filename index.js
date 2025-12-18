@@ -6,13 +6,13 @@ const { Pool } = require("pg");
 const KAFKA_BROKER = process.env.KAFKA_BROKER;
 const KAFKA_OUTPUT_TOPIC = process.env.KAFKA_OUTPUT_TOPIC;
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS, 10);
-const POLL_COLUMN = "updated_at"; // The column used to detect new/updated rows.
+const POLL_COLUMN = "updated_time"; // The column used to detect new/updated rows.
 
 // --- PostgreSQL Client Pool ---
 const pgPool = new Pool({
   host: process.env.POSTGRES_HOST,
   port: process.env.POSTGRES_PORT,
-  user: process.env.POSTGRES_USER,
+  user: process.env.POSTGRES_PORT,
   password: process.env.POSTGRES_PASSWORD,
   database: process.env.POSTGRES_DB,
 });
