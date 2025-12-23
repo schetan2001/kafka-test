@@ -12,6 +12,7 @@ const app = express();
 const corsOptions = {
   origin: [
     "https://tap-sit.royalenfield.com",
+    "https://wingman-portal-preprod.royalenfield.com",
     "http://localhost:3000",
     "http://localhost:3001",
   ],
@@ -51,24 +52,10 @@ const schema = buildSchema(`
   }
 
   type Mutation {
-    createGeofence(name: String!, radius: Int!, coordinates: [[Float!]!]!, systemId: String!, notification: Int!): AggregateGeofenceResponse
+    createGeofence(name: String!, radius: Int!, coordinates: [[Float!]!]!, systemId: String!, notification: Int!): JSON
     updateGeofence(geoId: String!, name: String!, radius: Int!, coordinates: [[Float!]!]!, systemId: String!, notification: Int!): JSON
     deleteGeofence(geoId: String!): JSON
-    toggleGeofence(systemId: String!, geoId: String!, action: String!): JSON
-  }
-
-  type API1Response {
-    responseData: API1ResponseData
-    message: String
-  }
-  type API1ResponseData { geoId: String }
-  type API2Response { geofenceMappings: [API2GeofenceMapping] }
-  type API2GeofenceMapping { systemId: String, vehicleMappingId: String, message: String }
-  type AggregateGeofenceResponse {
-    api1: API1Response
-    api2: API2Response
-    message: String
-    geofenceStatus: String
+    enabledisableGeofence(systemId: String!, geoId: String!, action: String!): JSON
   }
 `);
 
@@ -82,11 +69,8 @@ const root = {
     notification,
   }) => {
     try {
-      const timestamp = Date.now();
-      const dynamicName = `${name}${timestamp}`;
-
       const api1Payload = {
-        name: dynamicName,
+        name: name,
         geometryType: "circle",
         radius: radius,
         coordinates: coordinates,
@@ -150,6 +134,7 @@ const root = {
 
       const api2Data = api2Response.data;
       let geofenceStatus = null;
+      let vehicleMappingId = null;
 
       if (
         api2Response.status === 200 &&
@@ -157,7 +142,7 @@ const root = {
           ?.toLowerCase()
           .includes("initiated")
       ) {
-        const vehicleMappingId = api2Data.geofenceMappings[0].vehicleMappingId;
+        vehicleMappingId = api2Data.geofenceMappings[0].vehicleMappingId;
 
         if (vehicleMappingId) {
           // Wait for a moment before checking the status
@@ -173,7 +158,7 @@ const root = {
               },
             }
           );
-          geofenceStatus = statusResponse.data?.responseData?.geofenceStatus;
+          geofenceStatus = statusResponse.data?.responseData?.geofenceStatus || "PENDING";
         }
       }
 
@@ -186,9 +171,11 @@ const root = {
       );
 
       return {
-        api1: api1Response.data,
-        api2: { geofenceMappings: api2GeofenceMappings },
+        message: "Geofence creation process completed.",
+        geoId: geoId,
+        vehicleMappingId: vehicleMappingId,
         geofenceStatus: geofenceStatus,
+        details: api2Data.geofenceMappings,
       };
     } catch (error) {
       console.error(
@@ -199,20 +186,19 @@ const root = {
       const errorMessage =
         error.response?.data?.errors?.[0]?.message ||
         error.message ||
-        "An error occurred";
+        "An unknown error occurred during geofence creation.";
 
+      // Return a simple error object
       return {
-        message: errorMessage,
-        api1: null,
-        api2: null,
-        geofenceStatus: null,
+        error: errorMessage,
+        details: error.response?.data,
       };
     }
   },
   getGeoFences: async ({ systemId }) => {
     try {
       const response = await axios.get(
-        `${BASE_URL}/location/vehicles/${systemId}/geo-fences`,
+        `${BASE_URL}/location/vehicles/${systemId}/geo-fences?isActive=true`,
         {
           headers: {
             accept:
@@ -228,7 +214,14 @@ const root = {
     }
   },
 
-  updateGeofence: async ({ geoId, name, radius, coordinates, systemId, notification }) => {
+  updateGeofence: async ({
+    geoId,
+    name,
+    radius,
+    coordinates,
+    systemId,
+    notification,
+  }) => {
     try {
       // API 1 update
       const api1Payload = {
@@ -244,35 +237,41 @@ const root = {
       };
       await axios.put(`${BASE_URL}/location/locations/${geoId}`, api1Payload, {
         headers: {
-          accept: "application/com.c2c.telemetry.location.dto.v1.response.locationresponse.v1+json",
+          accept:
+            "application/com.c2c.telemetry.location.dto.v1.response.locationresponse.v1+json",
           "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
           "x-requestor": "test",
-          "Content-Type": "application/com.c2c.telemetry.location.dto.v1.request.locationrequestnew.v1+json",
+          "Content-Type":
+            "application/com.c2c.telemetry.location.dto.v1.request.locationrequestnew.v1+json",
         },
       });
 
       // API 2 notification update
       const api2Payload = {
-        mapping: [{
-          schedule: {},
-          notification,
-          isEdgeEnabled: 1,
-          ruleId: 0,
-          isActive: true,
-          ruleExpression: "string",
-          name,
-          systemId,
-        }],
+        mapping: [
+          {
+            schedule: {},
+            notification,
+            isEdgeEnabled: 1,
+            ruleId: 0,
+            isActive: true,
+            ruleExpression: "string",
+            name,
+            systemId,
+          },
+        ],
       };
       const api2Response = await axios.put(
-        `${BASE_URL}/location/vehicles/geo-fences/${geoId}`,
+        `${BASE_URL}/location/vehicles/${systemId}/geo-fences/${geoId}`,
         api2Payload,
         {
           headers: {
-            accept: "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
+            accept:
+              "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
             "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
             "x-requestor": "test",
-            "Content-Type": "application/com.c2c.telemetry.location.dto.v1.request.addtelemetrylocationdetailsrequestnew.v1+json",
+            "Content-Type":
+              "application/com.c2c.telemetry.location.dto.v1.request.addtelemetrylocationdetailsrequestnew.v1+json",
           },
         }
       );
@@ -288,7 +287,8 @@ const root = {
         `${BASE_URL}/location/locations/${geoId}?isPOI=true`,
         {
           headers: {
-            accept: "application/com.c2c.telemetry.location.dto.v1.response.locationresponsedata.v1+json",
+            accept:
+              "application/com.c2c.telemetry.location.dto.v1.response.locationresponsedata.v1+json",
             "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
             "x-requestor": "test",
           },
@@ -300,7 +300,7 @@ const root = {
     }
   },
 
-  toggleGeofence: async ({ systemId, geoId, action }) => {
+  enabledisableGeofence: async ({ systemId, geoId, action }) => {
     try {
       const lowerCaseAction = String(action || "").toLowerCase();
       if (!["enable", "disable"].includes(lowerCaseAction)) {
@@ -311,10 +311,12 @@ const root = {
         {},
         {
           headers: {
-            accept: "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
+            accept:
+              "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
             "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
             "x-requestor": "test",
-            "Content-Type": "application/com.c2c.telemetry.location.dto.v1.request.telemetrylocationdetailsrequestnew.v1+json",
+            "Content-Type":
+              "application/com.c2c.telemetry.location.dto.v1.request.telemetrylocationdetailsrequestnew.v1+json",
           },
         }
       );
