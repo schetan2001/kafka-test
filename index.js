@@ -272,7 +272,7 @@ const root = {
             "api-key": GEOFENCE_API_KEY,
             "x-requestor": "test",
             "Content-Type":
-              "application/com.c2c.telemetry.location.dto.v1.request.addtelemetrylocationdetailsrequestnew.v1+json",
+              "application/com.c2c.telemetry.location.dto.v1.request.telemetrylocationdetailsrequestnew.v1+json",
           },
         }
       );
