@@ -26,12 +26,13 @@ app.use(cors(corsOptions));
 
 const INGRESS_API_KEY = process.env.API_KEY || "dashboard-api-key";
 const BASE_URL = process.env.BASE_URL || "https://cbp-eu-uat.royalenfield.com";
-const COTA_API_KEY = "YzB0YSRlcnZpY2VANDU2";
-const STATE_API_KEY = "JHRhdGVvcGVyYXRpMCRuJGVydmljZUA0NTY";
-const TELEMETRY_API_KEY = "dGVsZW1ldHJ5LWN1cnJAMTIz";
-const CCSERVICE_API_KEY = "Y2NzZXJ2aWNlQDc4OQ";
-const VEHICLE_METADATA_API_KEY = "dmVoaWNsZS1hcGk";
-const VEHICLE_HEALTH_API_KEY = "ZHRjLWNvZGVz";
+const COTA_API_KEY = process.env.COTA_API_KEY;
+const STATE_API_KEY = process.env.STATE_API_KEY;
+const TELEMETRY_API_KEY = process.env.TELEMETRY_API_KEY;
+const CCSERVICE_API_KEY = process.env.CCSERVICE_API_KEY;
+const VEHICLE_METADATA_API_KEY = process.env.VEHICLE_METADATA_API_KEY;
+const VEHICLE_HEALTH_API_KEY = process.env.VEHICLE_HEALTH_API_KEY;
+const CAMPAIGN_API_KEY= process.env.CAMPAIGN_API_KEY;
 
 // GraphQL schema
 const schema = buildSchema(`
@@ -608,7 +609,7 @@ const root = {
         {
           headers: {
             accept: "*/*",
-            "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
+            "api-key": CAMPAIGN_API_KEY,
             "x-requestor": "admin",
           },
         }
@@ -631,7 +632,7 @@ const root = {
           {
             headers: {
               accept: "*/*",
-              "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
+              "api-key": CAMPAIGN_API_KEY,
               "x-requestor": "admin",
             },
           }
