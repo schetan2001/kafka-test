@@ -25,6 +25,7 @@ app.use(cors(corsOptions));
 
 const INGRESS_API_KEY = process.env.API_KEY;
 const BASE_URL = process.env.BASE_URL;
+const GEOFENCE_API_KEY = process.env.GEOFENCE_API_KEY;
 
 // Middleware for API Key verification
 app.use("/circular-geofence", (req, res, next) => {
@@ -88,7 +89,7 @@ const root = {
           headers: {
             accept:
               "application/com.c2c.telemetry.location.dto.v1.response.locationresponse.v1+json",
-            "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
+            "api-key": GEOFENCE_API_KEY,
             "x-requestor": "test",
             "Content-Type":
               "application/com.c2c.telemetry.location.dto.v1.request.locationrequestnew.v1+json",
@@ -124,7 +125,7 @@ const root = {
           headers: {
             accept:
               "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
-            "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
+            "api-key": GEOFENCE_API_KEY,
             "x-requestor": "test",
             "Content-Type":
               "application/com.c2c.telemetry.location.dto.v1.request.addtelemetrylocationdetailsrequestnew.v1+json",
@@ -153,7 +154,7 @@ const root = {
             {
               headers: {
                 accept: "application/json",
-                "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
+                "api-key": GEOFENCE_API_KEY,
                 "x-requestor": "test",
               },
             }
@@ -203,7 +204,7 @@ const root = {
           headers: {
             accept:
               "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
-            "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
+            "api-key": GEOFENCE_API_KEY,
             "x-requestor": "test",
           },
         }
@@ -239,7 +240,7 @@ const root = {
         headers: {
           accept:
             "application/com.c2c.telemetry.location.dto.v1.response.locationresponse.v1+json",
-          "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
+          "api-key": GEOFENCE_API_KEY,
           "x-requestor": "test",
           "Content-Type":
             "application/com.c2c.telemetry.location.dto.v1.request.locationrequestnew.v1+json",
@@ -268,7 +269,7 @@ const root = {
           headers: {
             accept:
               "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
-            "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
+            "api-key": GEOFENCE_API_KEY,
             "x-requestor": "test",
             "Content-Type":
               "application/com.c2c.telemetry.location.dto.v1.request.addtelemetrylocationdetailsrequestnew.v1+json",
@@ -289,7 +290,7 @@ const root = {
           headers: {
             accept:
               "application/com.c2c.telemetry.location.dto.v1.response.locationresponsedata.v1+json",
-            "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
+            "api-key": GEOFENCE_API_KEY,
             "x-requestor": "test",
           },
         }
@@ -313,7 +314,7 @@ const root = {
           headers: {
             accept:
               "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
-            "api-key": "dGVsZW1ldHJ5LWdlb2ZlbmNlQDc4OQ",
+            "api-key": GEOFENCE_API_KEY,
             "x-requestor": "test",
             "Content-Type":
               "application/com.c2c.telemetry.location.dto.v1.request.telemetrylocationdetailsrequestnew.v1+json",
