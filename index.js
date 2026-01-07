@@ -10,6 +10,7 @@ const app = express();
 
 const INGRESS_API_KEY = process.env.API_KEY;
 const BASE_URL = process.env.BASE_URL;
+const CAMPAIGN_API_KEY = process.env.CAMPAIGN_API_KEY;
 
 // Middleware for API Key verification
 app.use("/package-download", (req, res, next) => {
@@ -46,7 +47,7 @@ const root = {
         {
           headers: {
             accept: "*/*",
-            "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
+            "api-key": CAMPAIGN_API_KEY,
             "x-requestor": "fota",
           },
         }
@@ -66,7 +67,7 @@ const root = {
         {
           headers: {
             accept: "*/*",
-            "api-key": "WTJGdGNHRnBaMjVBVFdGdVlXZGxjakV5TXc",
+            "api-key": CAMPAIGN_API_KEY,
             "x-requestor": "fota",
           },
         }
