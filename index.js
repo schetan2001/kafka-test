@@ -172,7 +172,7 @@ const schema = buildSchema(`
 `);
 
 // Helper function to extract signal value
-const extractSignalValue = (signals, signalName) => {
+const extractSignalValue = (signals, signalName, eventType = null) => {
   // OBD Critical Packet for vehicle mode signals
   const vehicleModeSignals = [
     "Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V",
@@ -180,24 +180,24 @@ const extractSignalValue = (signals, signalName) => {
     "Vehicle_Mode__Vehicle_Mode_Lvl_3_RX_V",
   ];
 
-  const signal = signals?.find(
-    (s) =>
-      s.name === signalName &&
-      (vehicleModeSignals.includes(signalName)
-        ? s.eventType === 6500
-        : !signalName.startsWith("AL_") || s.eventType === 3101)
-  );
+  const signal = signals?.find((s) => {
+    if (s.name !== signalName) {
+      return false;
+    }
+    if (eventType) {
+      return s.eventType === eventType;
+    }
+    return vehicleModeSignals.includes(signalName)
+      ? s.eventType === 6500
+      : !signalName.startsWith("AL_") || s.eventType === 3101;
+  });
 
   return signal ? signal.value : null;
 };
 
 const getSignalStrength = (signals) => {
-  const rsrp = parseFloat(
-    extractSignalValue(signals, "RF_Parameters_2__LTE_RSRP_TX_V")
-  );
-  const rsrq = parseFloat(
-    extractSignalValue(signals, "RF_Parameters_2__LTE_RSRQ_TX_V")
-  );
+  const rsrp = parseFloat(extractSignalValue(signals, "AL_RSRP", 3101));
+  const rsrq = parseFloat(extractSignalValue(signals, "AL_RSRQ", 3101));
 
   if (isNaN(rsrp) || isNaN(rsrq)) return null;
 
