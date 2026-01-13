@@ -34,10 +34,7 @@ async function getAccessToken() {
 
 async function handleKafkaMessage(payload) {
   const { systemId, dtcSnapshot, timestamp } = payload;
-
-  if (!systemId || !Array.isArray(dtcSnapshot) || dtcSnapshot.length === 0) {
-    return;
-  }
+  if (!systemId || !Array.isArray(dtcSnapshot) || dtcSnapshot.length === 0) return;
 
   try {
     const token = await getAccessToken();
@@ -48,72 +45,70 @@ async function handleKafkaMessage(payload) {
     };
 
     for (const dtc of dtcSnapshot) {
-      const ticketKey = `${systemId}-${dtc.dtcCode}`;
-      const isFaultActive = String(dtc.triggerValue) === "1";
+      const propId = dtc.propId ?? parseInt(String(dtc.triggerSignal || '').replace('ID_', ''), 10);
+      const ticketKey = `${systemId}-${propId}`;
+
+      const valNum = Number(dtc.triggerValue);
+      const isActive = valNum > 0;     // create on > 0
+      const isZero = valNum === 0;     // close on == 0
       const ticketExists = activeTicketsCache.has(ticketKey);
 
-      if (isFaultActive && !ticketExists) {
-        // --- CREATE TICKET LOGIC ---
-        const subject = `DTC Alert: ${dtc.dtcCode} for System ID ${systemId}`;
-        const description = `A new diagnostic alert has been triggered for vehicle: <b>${systemId}</b>.<br><br>` +
-                            `<b>Time of Alert:</b> ${new Date(timestamp).toUTCString()}<br>` +
-                            `<b>DTC Code:</b> ${dtc.dtcCode}<br>` +
-                            `<b>Description:</b> ${dtc.dtcDescription}<br>` +
-                            `<b>Status:</b> ${dtc.status}<br>` +
-                            `<b>Trigger Signal:</b> ${dtc.triggerSignal} (Value: ${dtc.triggerValue})<br>`;
+      if (isZero && ticketExists) {
+        // --- CLOSE ticket for this property ---
+        const { ticketId } = activeTicketsCache.get(ticketKey);
+        const updateUrl = `${TICKET_API_URL}/${ticketId}`;
+        const resolutionPayload = {
+          request: {
+            status: { name: "Resolved" },
+            resolution: { content: `Fault cleared for property ${propId}. Auto-closed.` }
+          }
+        };
+        const form = new URLSearchParams();
+        form.append('input_data', JSON.stringify(resolutionPayload));
+        try {
+          await axios.put(updateUrl, form, { headers });
+          console.log(`Resolved ticket ${ticketId} for systemId=${systemId}, propId=${propId}`);
+          activeTicketsCache.delete(ticketKey);
+        } catch (e) {
+          console.error(`Failed to resolve ticket ${ticketId} for ${systemId}/${propId}:`, e.response?.data || e.message);
+        }
+        continue;
+      }
+
+      if (isActive && !ticketExists) {
+        // --- CREATE ticket for this property ---
+        const subject = `DTC Alert for ${systemId} | Property ${propId} | ${dtc.dtcCode}`;
+        const description =
+          `Fault detected for systemId <b>${systemId}</b> at ${new Date(timestamp).toUTCString()}<br>` +
+          `<b>Property ID:</b> ${propId}<br>` +
+          `<b>DTC:</b> ${dtc.dtcCode} - ${dtc.dtcDescription}<br>` +
+          `<b>Value:</b> ${dtc.triggerValue}`;
 
         const ticketJsonPayload = {
           request: {
-            subject: subject,
+            subject,
             group: { name: "FF GRID Support" },
-            description: description,
+            description,
             requester: { email_id: "schetan@royalenfield.com" },
             template: { name: "Freshdesk" }
           }
         };
-
-        const formData = new URLSearchParams();
-        formData.append('input_data', JSON.stringify(ticketJsonPayload));
+        const form = new URLSearchParams();
+        form.append('input_data', JSON.stringify(ticketJsonPayload));
 
         try {
-          const response = await axios.post(TICKET_API_URL, formData, { headers });
-          const newTicketId = response.data.request.id;
-          console.log(`  - Successfully created ticket for ${dtc.dtcCode}. Ticket ID: ${newTicketId}`);
-          
-          // Store the new ticket ID in the cache.
+          const resp = await axios.post(TICKET_API_URL, form, { headers });
+          const newTicketId = resp.data.request.id;
+          console.log(`Created ticket ${newTicketId} for systemId=${systemId}, propId=${propId}`);
           activeTicketsCache.set(ticketKey, { ticketId: newTicketId, createdAt: Date.now() });
-        } catch (ticketError) {
-          console.error(`  - Failed to create ticket for ${dtc.dtcCode}:`, ticketError.response?.data || ticketError.message);
-        }
-
-      } else if (!isFaultActive && ticketExists) {
-        // --- RESOLVE TICKET LOGIC ---
-        const { ticketId } = activeTicketsCache.get(ticketKey);
-        const updateUrl = `${TICKET_API_URL}/${ticketId}`;
-        
-        const resolutionPayload = {
-          request: {
-            status: { name: "Resolved" },
-            resolution: { content: "Fault cleared automatically based on vehicle signal." }
-          }
-        };
-
-        const formData = new URLSearchParams();
-        formData.append('input_data', JSON.stringify(resolutionPayload));
-
-        try {
-          await axios.put(updateUrl, formData, { headers }); // Use PUT for updates
-          console.log(`  - Successfully resolved ticket ${ticketId} for DTC ${dtc.dtcCode}.`);
-          
-          // Immediately remove the ticket from the cache upon successful resolution.
-          activeTicketsCache.delete(ticketKey);
-        } catch (ticketError) {
-          console.error(`  - Failed to resolve ticket ${ticketId} for ${dtc.dtcCode}:`, ticketError.response?.data || ticketError.message);
+        } catch (e) {
+          console.error(`Failed to create ticket for ${systemId}/${propId}:`, e.response?.data || e.message);
         }
       }
+      // else: no state change (still active and already open, or zero without existing ticket)
     }
   } catch (err) {
-    console.error("A critical error occurred during ticket processing:", err.message);
+    console.error("Ticket processing error:", err.message);
   }
 }
 
