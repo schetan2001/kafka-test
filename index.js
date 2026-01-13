@@ -6,19 +6,17 @@ const KAFKA_BROKER = process.env.KAFKA_BROKER;
 const INPUT_TOPIC = process.env.INPUT_TOPIC;
 const OUTPUT_TOPIC = process.env.OUTPUT_TOPIC;
 
-// --- DTC Rules Definition ---
+// --- DTC Rules Definition for event_type 6506 ---
 // A Map for efficient lookups using Property_ID as the key.
 const dtcRules = new Map([
-  [557875431, { dtcCode: "P10501", description: "AC input voltage above the operating voltage" }],
-  [557875432, { dtcCode: "P10502", description: "AC input voltage below the operating voltage" }],
-  [557875433, { dtcCode: "P10503", description: "AC input current below the operating voltage" }],
-  [557875434, { dtcCode: "P10504", description: "OBC Output DC Current above the operating current" }],
-  [557875435, { dtcCode: "P10505", description: "OBC Temperature above the operating temperature" }],
-  [557875436, { dtcCode: "P10506", description: "OBC Temperature below the operating temperature" }],
-  [557875437, { dtcCode: "P10507", description: "OBC Temperature sensor value above or below the operating value" }],
-  [557875438, { dtcCode: "P10508", description: "OBC Current senor value above or below the operating value" }],
-  [557875439, { dtcCode: "P10509", description: "OBC output contactor / relay welded or not closing" }],
-  [557875440, { dtcCode: "P1050A", description: "OBC output connector not connected with battery" }],
+  [557875737, { dtcCode: "U0101", description: "BMS Heartbeat Not received to VCU" }],
+  [557875738, { dtcCode: "U0102", description: "MCU Heartbeat Not received to VCU" }],
+  [557875739, { dtcCode: "U0103", description: "OBC Heartbeat Not received to VCU" }],
+  [557875690, { dtcCode: "U0104", description: "CAN Frame not receieved from ABS IMU to VCU" }],
+  [557875443, { dtcCode: "P0A01", description: "Low Voltage in OBC Output" }],
+  [557875640, { dtcCode: "P0A02", description: "Battery Dischage Fuse Failed" }],
+  [557875643, { dtcCode: "P0A03", description: "High volatge Interlock loop error" }],
+  [557875626, { dtcCode: "U0105", description: "OBC CAN Disconnected" }],
 ]);
 
 // --- Kafka Client Setup ---
@@ -43,37 +41,45 @@ async function processMessage(message) {
     return;
   }
 
-  const responseData = inputPayload.responseData;
-  if (!responseData || !responseData.systemId || !Array.isArray(responseData.signals)) {
-    console.warn("Skipping message with invalid format. Missing systemId or signals array.");
+  // Validate new message structure
+  if (!inputPayload.meta?.system_id || !Array.isArray(inputPayload.telemetry)) {
+    console.warn("Skipping message with invalid format. Missing meta.system_id or telemetry array.");
     return;
   }
 
-  const { systemId, signals } = responseData;
+  const systemId = inputPayload.meta.system_id;
   const dtcSnapshot = [];
   let eventTimestamp = null;
 
-  // Iterate through each signal in the incoming message
-  for (const signal of signals) {
-    // Check if a rule exists for this signal's ID, regardless of its value.
-    if (dtcRules.has(signal.id)) {
-      const rule = dtcRules.get(signal.id);
-      const signalValue = String(signal.value);
+  // Iterate through each telemetry event in the message
+  for (const telemetryEvent of inputPayload.telemetry) {
+    // Only process events with event_type 6506
+    if (telemetryEvent.event_type !== 6506 || !Array.isArray(telemetryEvent.data)) {
+      continue;
+    }
 
-      // Dynamically set the status based on the signal's value.
-      const status = signalValue === "1" ? "Active" : "Inactive";
+    // Use the timestamp from the first valid telemetry event
+    if (!eventTimestamp) {
+      eventTimestamp = telemetryEvent.time;
+    }
 
-      dtcSnapshot.push({
-        dtcCode: rule.dtcCode,
-        dtcDescription: rule.description,
-        status: status,
-        triggerSignal: signal.name,
-        triggerValue: signalValue,
-      });
+    // Iterate through each data point in the telemetry event
+    for (const signal of telemetryEvent.data) {
+      if (dtcRules.has(signal.id)) {
+        const rule = dtcRules.get(signal.id);
+        // The value is the first element in the 'value' array
+        const signalValue = String(signal.value?.[0] ?? "0");
 
-      // Use the timestamp from the first matching signal
-      if (!eventTimestamp) {
-        eventTimestamp = signal.updatedTime;
+        // Dynamically set the status based on the signal's value.
+        const status = signalValue === "1" ? "Active" : "Inactive";
+
+        dtcSnapshot.push({
+          dtcCode: rule.dtcCode,
+          dtcDescription: rule.description,
+          status: status,
+          triggerSignal: `ID_${signal.id}`, // Signal name is not provided in the new format
+          triggerValue: signalValue,
+        });
       }
     }
   }
