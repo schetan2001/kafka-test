@@ -37,7 +37,6 @@ const CAMPAIGN_API_KEY= process.env.CAMPAIGN_API_KEY;
 // GraphQL schema
 const schema = buildSchema(`
   type Query {
-    getVehicleState(systemId: String!): VehicleStateResponse
     getVehicleStatuses(systemId: String!): VehicleStatusesResponse
     getLockUnlockTracking(trackingId: String!): JSON
     getVehicleRideModeTracking(trackingId: String!): JSON
@@ -65,7 +64,7 @@ const schema = buildSchema(`
 
   scalar JSON
 
-  type VehicleStateResponse {
+  type VehicleStatusesResponse {
     ignition: String
     lastHeartBeatTime: String
     currentState: String
@@ -73,17 +72,12 @@ const schema = buildSchema(`
     gpsFix: String
     vehicleMode: String
     speed: String
-  }
-
-  type VehicleStatusesResponse {
     hillHold: String
     cruiseControlStatus: String
     tractionControl: String
     regenSetting: String
     sideStandStatus: String
     gpsSignalStrength: String
-    tpmsFront: String
-    tpmsRear: String
     liveOdo: String
     trip1Odo: String
     trip2Odo: String
@@ -138,9 +132,17 @@ const schema = buildSchema(`
     timeToChargeMins: String
     absSensitivity: String
     powerOutputControl: String
-    torqueMapControl: String
+    throttleMapControl: String
     regenCoastControl: String
     regenBrakeControl: String
+    batteryTempMin: String
+    batteryTempMax: String
+    frontPressureLvl: String
+    rearPressureLvl: String
+    frontTempLvl: String 
+    rearTempLvl: String
+    frontBatteryLvl: String
+    rearBatteryLvl: String
     updatedTime: String
   }
 
@@ -232,13 +234,13 @@ const getSignalStrength = (signals) => {
 const getChargingStatus = (signals) => {
   const modeLvl1 = extractSignalValue(
     signals,
-    "Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V"
+    "Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V", 6500
   );
 
   if (modeLvl1 === "5") {
     const modeLvl2 = extractSignalValue(
       signals,
-      "Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V"
+      "Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V", 6500
     );
 
     if (modeLvl2 === "15") return "Fast Charging";
@@ -251,7 +253,7 @@ const getChargingStatus = (signals) => {
 const getVehicleStatus = (signals) => {
   const modeLvl1 = extractSignalValue(
     signals,
-    "Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V"
+    "Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V", 6500
   );
 
   // First check if vehicle is riding
@@ -260,7 +262,7 @@ const getVehicleStatus = (signals) => {
   // If not riding, check lock status
   const modeLvl3 = extractSignalValue(
     signals,
-    "Vehicle_Mode__Vehicle_Mode_Lvl_3_RX_V"
+    "Vehicle_Mode__Vehicle_Mode_Lvl_3_RX_V", 6500
   );
 
   if (["1", "4", "6"].includes(modeLvl3)) return "Locked";
@@ -268,7 +270,7 @@ const getVehicleStatus = (signals) => {
   // If not locked, check parking status
   const modeLvl2 = extractSignalValue(
     signals,
-    "Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V"
+    "Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V", 6500
   );
   if (modeLvl2 === "12") return "Parked";
 
@@ -277,26 +279,39 @@ const getVehicleStatus = (signals) => {
 
 // Resolver function for the query
 const root = {
-  getVehicleState: async ({ systemId }) => {
+  getVehicleStatuses: async ({ systemId }) => {
     try {
-      const response = await axios.post(
-        `${BASE_URL}/state-operation-service/state/vehicles`,
-        [systemId],
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "api-key": STATE_API_KEY,
-            "x-requestor": "test",
-          },
-        }
-      );
+      // Fetch both APIs in parallel
+      const [stateResponse, telemetryResponse] = await Promise.all([
+        axios.post(
+          `${BASE_URL}/state-operation-service/state/vehicles`,
+          [systemId],
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "api-key": STATE_API_KEY,
+              "x-requestor": "test",
+            },
+          }
+        ),
+        axios.get(
+          `${BASE_URL}/telemetry-curr/current-value/${systemId}`,
+          {
+            headers: {
+              accept: "*/*",
+              "x-requestor": "test",
+              "api-key": TELEMETRY_API_KEY,
+            },
+          }
+        )
+      ]);
 
-      const data = response.data;
-
-      if (data.result && data.result.length > 0) {
-        const vehicleData = data.result[0].responseData.vehicleStateData;
-        const lastHeartBeatTime = data.result[0].responseData.lastHeartBeatTime;
-        return {
+      // Extract state data
+      let stateData = {};
+      if (stateResponse.data?.result?.[0]?.responseData) {
+        const vehicleData = stateResponse.data.result[0].responseData.vehicleStateData;
+        const lastHeartBeatTime = stateResponse.data.result[0].responseData.lastHeartBeatTime;
+        stateData = {
           ignition: vehicleData.ignition,
           lastHeartBeatTime: String(lastHeartBeatTime),
           currentState: vehicleData.currentState,
@@ -305,261 +320,99 @@ const root = {
           vehicleMode: vehicleData.vehicleMode,
           speed: vehicleData.speed,
         };
-      } else {
-        throw new Error("Vehicle data not found");
       }
-    } catch (error) {
-      console.error(error);
-      throw new Error("Failed to fetch vehicle state");
-    }
-  },
-  getVehicleStatuses: async ({ systemId }) => {
-    try {
-      const response = await axios.get(
-        `${BASE_URL}/telemetry-curr/current-value/${systemId}`,
-        {
-          headers: {
-            accept: "*/*",
-            "x-requestor": "test",
-            "api-key": TELEMETRY_API_KEY,
-          },
-        }
-      );
 
-      const data = response.data;
+      // Extract telemetry data
+      let telemetryData = {};
+      if (telemetryResponse.data?.responseData?.signals) {
+        const signals = telemetryResponse.data.responseData.signals;
 
-      if (data && data.responseData && data.responseData.signals) {
-        const signals = data.responseData.signals;
-
-        const event3101Signal = data.responseData.signals.find(
+        const event3101Signal = signals.find(
           (signal) => signal.eventType === 3101
         );
-        const updatedTime = event3101Signal
-          ? event3101Signal.updatedTime
-          : null;
+        const updatedTime = event3101Signal ? event3101Signal.updatedTime : null;
 
-        return {
-          hillHold: extractSignalValue(
-            signals,
-            "MCU_Data_2__Hill_Hold_Sts_RX_V"
-          ),
-          cruiseControlStatus: extractSignalValue(
-            signals,
-            "MCU_Data_2__Cruise_Control_Status_RX_V"
-          ),
-          tractionControl: extractSignalValue(
-            signals,
-            "Custom_Mode__Traction_Control_TX_V"
-          ),
-          regenSetting: extractSignalValue(
-            signals,
-            "SOM_Settings_Data__Regen_Setting_TX_V"
-          ),
-          sideStandStatus: extractSignalValue(
-            signals,
-            "Display_info__Side_Stand_Sts_RX_V"
-          ),
-          gpsSignalStrength: extractSignalValue(
-            signals,
-            "AL_GPS_SIGNAL_STRENGTH"
-          ),
-          tpmsFront: extractSignalValue(
-            signals,
-            "SOM_Settings_Data__TPMS_Front_TX_V"
-          ),
-          tpmsRear: extractSignalValue(
-            signals,
-            "SOM_Settings_Data__TPMS_Rear_TX_V"
-          ),
-          liveOdo: extractSignalValue(signals, "VCU_Data9__Live_Odo_RX_V"),
-          trip1Odo: extractSignalValue(signals, "VCU_Data6__Trip1_Odo_RX_V"),
-          trip2Odo: extractSignalValue(signals, "VCU_Data6__Trip2_Odo_RX_V"),
-          slcOdo: extractSignalValue(signals, "VCU_Data5__SLC_Odo_RX_V"),
-          odometer: extractSignalValue(signals, "VCU_Data5__Odometer_RX_V"),
-          lteConnStatus: extractSignalValue(
-            signals,
-            "RF_Parameters_2__LTE_Conn_Sts_TX_V"
-          ),
+        telemetryData = {
+          hillHold: extractSignalValue(signals, "MCU_Data_2__Hill_Hold_Sts_RX_V", 6502),
+          cruiseControlStatus: extractSignalValue(signals, "MCU_Data_2__Cruise_Control_Status_RX_V", 6502),
+          tractionControl: extractSignalValue(signals, "Custom_Mode__Traction_Control_TX_V", 6500),
+          regenSetting: extractSignalValue(signals, "SOM_Settings_Data__Regen_Setting_TX_V", 6500),
+          sideStandStatus: extractSignalValue(signals, "Display_info__Side_Stand_Sts_RX_V", 6500),
+          gpsSignalStrength: extractSignalValue(signals, "AL_GPS_SIGNAL_STRENGTH", 3101),
+          liveOdo: extractSignalValue(signals, "VCU_Data9__Live_Odo_RX_V", 6500),
+          trip1Odo: extractSignalValue(signals, "VCU_Data6__Trip1_Odo_RX_V", 6500),
+          trip2Odo: extractSignalValue(signals, "VCU_Data6__Trip2_Odo_RX_V", 6500),
+          slcOdo: extractSignalValue(signals, "VCU_Data5__SLC_Odo_RX_V", 6500),
+          odometer: extractSignalValue(signals, "VCU_Data5__Odometer_RX_V", 6500),
+          lteConnStatus: extractSignalValue(signals, "RF_Parameters_2__LTE_Conn_Sts_TX_V", 6500),
           lteSignalStrength: getSignalStrength(signals),
-          trip1DurationHrs: extractSignalValue(
-            signals,
-            "VCU_Data7__T1_Duration_Hrs_RX_V"
-          ),
-          trip1DurationMins: extractSignalValue(
-            signals,
-            "VCU_Data7__T1_Duration_Mins_RX_V"
-          ),
-          trip1MaxSpeed: extractSignalValue(
-            signals,
-            "VCU_Data2__T1_Max_Speed_RX_V"
-          ),
-          trip1AvgSpeed: extractSignalValue(
-            signals,
-            "VCU_Data2__T1_Avg_Speed_RX_V"
-          ),
-          trip1AvgEff: extractSignalValue(
-            signals,
-            "VCU_Data2__T1_Avg_Eff_RX_V"
-          ),
-          trip1TotalEnergyConsump: extractSignalValue(
-            signals,
-            "VCU_Data2__T1_Total_Energy_Consump_RX_V"
-          ),
-          trip2DurationHrs: extractSignalValue(
-            signals,
-            "VCU_Data7__T2_Duration_Hrs_RX_V"
-          ),
-          trip2DurationMins: extractSignalValue(
-            signals,
-            "VCU_Data7__T2_Duration_Mins_RX_V"
-          ),
-          trip2AvgEff: extractSignalValue(
-            signals,
-            "VCU_Data3__T2_Avg_Eff_RX_V"
-          ),
-          trip2TotalEnergyConsump: extractSignalValue(
-            signals,
-            "VCU_Data3__T2_Total_Energy_Consump_RX_V"
-          ),
-          trip2MaxSpeed: extractSignalValue(
-            signals,
-            "VCU_Data3__T2_Max_Speed_RX_V"
-          ),
-          trip2AvgSpeed: extractSignalValue(
-            signals,
-            "VCU_Data3__T2_Avg_Speed_RX_V"
-          ),
-          slcMaxSpeed: extractSignalValue(
-            signals,
-            "VCU_Data4__SLC_Max_Speed_RX_V"
-          ),
-          slcAvgSpeed: extractSignalValue(
-            signals,
-            "VCU_Data4__SLC_Avg_Speed_RX_V"
-          ),
-          slcAvgEff: extractSignalValue(signals, "VCU_Data4__SLC_Avg_Eff_RX_V"),
-          slcTotalEnergyConsump: extractSignalValue(
-            signals,
-            "VCU_Data4__SLC_Total_Energy_Consump_RX_V"
-          ),
-          slcDurationMins: extractSignalValue(
-            signals,
-            "VCU_Data4__SLC_Duration_Mins_RX_V"
-          ),
-          liveDurationHrs: extractSignalValue(
-            signals,
-            "VCU_Data8__Live_Duration_Hrs_RX_V"
-          ),
-          liveDurationMins: extractSignalValue(
-            signals,
-            "VCU_Data8__Live_Duration_Mins_RX_V"
-          ),
-          liveMaxSpeed: extractSignalValue(
-            signals,
-            "VCU_Data8__Live_Max_Speed_RX_V"
-          ),
-          liveAvgSpeed: extractSignalValue(
-            signals,
-            "VCU_Data8__Live_Avg_Speed_RX_V"
-          ),
-          liveAvgEff: extractSignalValue(
-            signals,
-            "VCU_Data8__Live_Avg_Eff_RX_V"
-          ),
-          liveTotalEnergyConsump: extractSignalValue(
-            signals,
-            "VCU_Data8__Live_Total_Energy_Consump_RX_V"
-          ),
-          trip1ResetFlag: extractSignalValue(
-            signals,
-            "SOM_Settings_Data__Trip_1_Reset_flg_TX_V"
-          ),
-          trip2ResetFlag: extractSignalValue(
-            signals,
-            "SOM_Settings_Data__Trip_2_Reset_flg_TX_V"
-          ),
-          latitude: extractSignalValue(signals, "AL_LATITUDE"),
-          latitudeDirection: extractSignalValue(signals, "AL_LAT_DIR"),
-          longitude: extractSignalValue(signals, "AL_LONGITUDE"),
-          longitudeDirection: extractSignalValue(signals, "AL_LONG_DIR"),
-          gpsStatus: extractSignalValue(signals, "AL_GPS_STATUS"),
-          gpsFixValue: extractSignalValue(signals, "AL_GPS_FIX"),
-          rideMode: extractSignalValue(
-            signals,
-            "MCU_Data_2__MCU_Ride_Modes_RX_V"
-          ),
-          absState: extractSignalValue(
-            signals,
-            "SOM_Settings_Data__ABS_State_Sel_TX_V"
-          ),
-          chargingMode: extractSignalValue(
-            signals,
-            "Chrgr_STS_Info__Chrgr_Mode_RX_V"
-          ),
-          vehicleRange: extractSignalValue(
-            signals,
-            "Range_Info__DTE_Range_RX_V"
-          ),
-          conservativeRange: extractSignalValue(
-            signals,
-            "Range_Info__Cons_Range_RX_V"
-          ),
-          averageRange: extractSignalValue(
-            signals,
-            "Range_Info__Avg_Range_RX_V"
-          ),
-          aggressiveRange: extractSignalValue(
-            signals,
-            "Range_Info__Agg_Range_RX_V"
-          ),
-          rangeGain: extractSignalValue(
-            signals,
-            "Range_Info__Range_Gain_RX_V"
-          ),
-          batterySoc: extractSignalValue(
-            signals,
-            "Batt_Sts_Info__Display_SoC_RX_V"
-          ),
+          trip1DurationHrs: extractSignalValue(signals, "VCU_Data7__T1_Duration_Hrs_RX_V", 6500),
+          trip1DurationMins: extractSignalValue(signals, "VCU_Data7__T1_Duration_Mins_RX_V", 6500),
+          trip1MaxSpeed: extractSignalValue(signals, "VCU_Data2__T1_Max_Speed_RX_V", 6500),
+          trip1AvgSpeed: extractSignalValue(signals, "VCU_Data2__T1_Avg_Speed_RX_V", 6500),
+          trip1AvgEff: extractSignalValue(signals, "VCU_Data2__T1_Avg_Eff_RX_V", 6500),
+          trip1TotalEnergyConsump: extractSignalValue(signals, "VCU_Data2__T1_Total_Energy_Consump_RX_V", 6500),
+          trip2DurationHrs: extractSignalValue(signals, "VCU_Data7__T2_Duration_Hrs_RX_V", 6500),
+          trip2DurationMins: extractSignalValue(signals, "VCU_Data7__T2_Duration_Mins_RX_V", 6500),
+          trip2AvgEff: extractSignalValue(signals, "VCU_Data3__T2_Avg_Eff_RX_V", 6500),
+          trip2TotalEnergyConsump: extractSignalValue(signals, "VCU_Data3__T2_Total_Energy_Consump_RX_V", 6500),
+          trip2MaxSpeed: extractSignalValue(signals, "VCU_Data3__T2_Max_Speed_RX_V", 6500),
+          trip2AvgSpeed: extractSignalValue(signals, "VCU_Data3__T2_Avg_Speed_RX_V", 6500),
+          slcMaxSpeed: extractSignalValue(signals, "VCU_Data4__SLC_Max_Speed_RX_V", 6500),
+          slcAvgSpeed: extractSignalValue(signals, "VCU_Data4__SLC_Avg_Speed_RX_V", 6500),
+          slcAvgEff: extractSignalValue(signals, "VCU_Data4__SLC_Avg_Eff_RX_V", 6500),
+          slcTotalEnergyConsump: extractSignalValue(signals, "VCU_Data4__SLC_Total_Energy_Consump_RX_V", 6500),
+          slcDurationMins: extractSignalValue(signals, "VCU_Data4__SLC_Duration_Mins_RX_V", 6500),
+          liveDurationHrs: extractSignalValue(signals, "VCU_Data8__Live_Duration_Hrs_RX_V", 6500),
+          liveDurationMins: extractSignalValue(signals, "VCU_Data8__Live_Duration_Mins_RX_V", 6500),
+          liveMaxSpeed: extractSignalValue(signals, "VCU_Data8__Live_Max_Speed_RX_V", 6500),
+          liveAvgSpeed: extractSignalValue(signals, "VCU_Data8__Live_Avg_Speed_RX_V", 6500),
+          liveAvgEff: extractSignalValue(signals, "VCU_Data8__Live_Avg_Eff_RX_V", 6500),
+          liveTotalEnergyConsump: extractSignalValue(signals, "VCU_Data8__Live_Total_Energy_Consump_RX_V", 6500),
+          trip1ResetFlag: extractSignalValue(signals, "SOM_Settings_Data__Trip_1_Reset_flg_TX_V", 6500),
+          trip2ResetFlag: extractSignalValue(signals, "SOM_Settings_Data__Trip_2_Reset_flg_TX_V", 6500),
+          latitude: extractSignalValue(signals, "AL_LATITUDE", 3101),
+          latitudeDirection: extractSignalValue(signals, "AL_LAT_DIR", 3101),
+          longitude: extractSignalValue(signals, "AL_LONGITUDE", 3101),
+          longitudeDirection: extractSignalValue(signals, "AL_LONG_DIR", 3101),
+          gpsStatus: extractSignalValue(signals, "AL_GPS_STATUS", 3101),
+          gpsFixValue: extractSignalValue(signals, "AL_GPS_FIX", 3101),
+          rideMode: extractSignalValue(signals, "MCU_Data_2__MCU_Ride_Modes_RX_V", 6502),
+          absState: extractSignalValue(signals, "SOM_Settings_Data__ABS_State_Sel_TX_V", 6500),
+          chargingMode: extractSignalValue(signals, "Chrgr_STS_Info__Chrgr_Mode_RX_V", 6502),
+          vehicleRange: extractSignalValue(signals, "Range_Info__DTE_Range_RX_V", 6501),
+          conservativeRange: extractSignalValue(signals, "Range_Info__Cons_Range_RX_V", 6501),
+          averageRange: extractSignalValue(signals, "Range_Info__Avg_Range_RX_V", 6501),
+          aggressiveRange: extractSignalValue(signals, "Range_Info__Agg_Range_RX_V", 6501),
+          rangeGain: extractSignalValue(signals, "Range_Info__Range_Gain_RX_V"),
+          batterySoc: extractSignalValue(signals, "Batt_Sts_Info__Display_SoC_RX_V", 6503),
           chargingStatus: getChargingStatus(signals),
           vehicleStatus: getVehicleStatus(signals),
-          lockStatus: extractSignalValue(
-            signals,
-            "VCU_Data__Veh_Authentication_Flag_RX_V"
-          ),
-          timeToChargeHrs: extractSignalValue(
-            signals,
-            "Batt_Limits__Time_to_Chrg_Hrs_RX_V"
-          ),
-          timeToChargeMins: extractSignalValue(
-            signals,
-            "Batt_Limits__Time_to_Chrg_Mins_RX_V"
-          ),
-          absSensitivity: extractSignalValue(
-            signals,
-            "SOM_Settings_Data__ABS_Sensitivity_Sel_TX_V"
-          ),
-          powerOutputControl: extractSignalValue(
-            signals,
-            "Custom_Mode__Power_Output_Control_TX_V"
-          ),
-          torqueMapControl: extractSignalValue(
-            signals,
-            "Custom_Mode__Torque_Map_Control_TX_V"
-          ),
-          regenCoastControl: extractSignalValue(
-            signals,
-            "Custom_Mode__Regen_Coast_Control_TX_V"
-          ),
-          regenBrakeControl: extractSignalValue(
-            signals,
-            "Custom_Mode__Regen_Brake_Control_TX_V"
-          ),
+          lockStatus: extractSignalValue(signals, "VCU_Data__Veh_Authentication_Flag_RX_V", 6500),
+          timeToChargeHrs: extractSignalValue(signals, "Batt_Limits__Time_to_Chrg_Hrs_RX_V", 6503),
+          timeToChargeMins: extractSignalValue(signals, "Batt_Limits__Time_to_Chrg_Mins_RX_V", 6503),
+          absSensitivity: extractSignalValue(signals, "SOM_Settings_Data__ABS_Sensitivity_Sel_TX_V", 6500),
+          powerOutputControl: extractSignalValue(signals, "Custom_Mode__Power_Output_Control_TX_V", 6500),
+          throttleMapControl: extractSignalValue(signals, "Custom_Mode__Throttle_Map_Control_TX_V", 6500),
+          regenCoastControl: extractSignalValue(signals, "Custom_Mode__Regen_Coast_Control_TX_V", 6500),
+          regenBrakeControl: extractSignalValue(signals, "Custom_Mode__Regen_Brake_Control_TX_V", 6500),
+          batteryTempMin: extractSignalValue(signals, "Batt_Temp__Batt_Temp_Min_RX_V", 6503),
+          batteryTempMax: extractSignalValue(signals, "Batt_Temp__Batt_Temp_Max_RX_V", 6503),
+          frontPressureLvl: extractSignalValue(signals, "Front_pressure_level", 6500),
+          rearPressureLvl: extractSignalValue(signals, "Rear_pressure_level", 6500),
+          frontTempLvl: extractSignalValue(signals, "Front_temperature_level", 6500),
+          rearTempLvl: extractSignalValue(signals, "Rear_temperature_level", 6500),
+          frontBatteryLvl: extractSignalValue(signals, "Front_battery_level", 6500),
+          rearBatteryLvl: extractSignalValue(signals, "Rear_battery_level", 6500),
           updatedTime: updatedTime,
         };
-      } else {
-        console.warn("Signals not found in response data:", data);
-        return {};
       }
+
+      // Combine both responses
+      return {
+        ...stateData,
+        ...telemetryData,
+      };
     } catch (error) {
       console.error("Error fetching vehicle statuses:", error);
       throw new Error("Failed to fetch vehicle statuses");
