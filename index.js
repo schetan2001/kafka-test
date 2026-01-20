@@ -76,21 +76,33 @@ async function handleKafkaMessage(payload) {
       }
 
       if (isActive && !ticketExists) {
-        // --- CREATE ticket for this property ---
+        const timestampIST = new Date(timestamp).toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
         const subject = `DTC Alert for ${systemId} | Property ${propId} | ${dtc.dtcCode}`;
         const description =
-          `Fault detected for systemId <b>${systemId}</b> at ${new Date(timestamp).toUTCString()}<br>` +
+          `Fault detected for systemId <b>${systemId}</b> at ${timestampIST} IST<br>` +
           `<b>Property ID:</b> ${propId}<br>` +
           `<b>DTC:</b> ${dtc.dtcCode} - ${dtc.dtcDescription}<br>` +
-          `<b>Value:</b> ${dtc.triggerValue}`;
+          `<b>Value:</b> ${dtc.triggerValue}<br>` +
+          `<b>Priority:</b> Medium<br><br>` +
+          `<b>Location Address:</b> W63G+4M5 MAIN BLOCK, 296, Rajiv Gandhi Salai, Elcot Sez, Sholinganallur, Chennai, Tamil Nadu 600119<br><br>` +
+          `<a href="https://wingman-portal-preprod.royalenfield.com/">View in Vehicle Support Portal</a>`;
 
         const ticketJsonPayload = {
           request: {
             subject,
             group: { name: "FF GRID Support" },
             description,
-            requester: { email_id: "schetan@royalenfield.com" },
-            template: { name: "Freshdesk" }
+            requester: { email_id: "itsmadmin@royalenfield.com" },
+            template: { name: "FF GRID" }
           }
         };
         const form = new URLSearchParams();
