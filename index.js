@@ -72,6 +72,7 @@ const schema = buildSchema(`
     gpsFix: String
     vehicleMode: String
     speed: String
+    ignitionStatus: String
     hillHold: String
     cruiseControlStatus: String
     tractionControl: String
@@ -333,8 +334,9 @@ const root = {
         const updatedTime = event3101Signal ? event3101Signal.updatedTime : null;
 
         telemetryData = {
-          hillHold: extractSignalValue(signals, "MCU_Data_2__Hill_Hold_Sts_RX_V", 6502),
-          cruiseControlStatus: extractSignalValue(signals, "MCU_Data_2__Cruise_Control_Status_RX_V", 6502),
+          ignitionStatus: extractSignalValue(signals, "VCU_Data__Ignition_Sts_RX_V", 6500),
+          hillHold: extractSignalValue(signals, "MCU_Data_2__Hill_Hold_Sts_RX_V", 6500),
+          cruiseControlStatus: extractSignalValue(signals, "MCU_Data_2__Cruise_Control_Status_RX_V", 6500),
           tractionControl: extractSignalValue(signals, "Custom_Mode__Traction_Control_TX_V", 6500),
           regenSetting: extractSignalValue(signals, "SOM_Settings_Data__Regen_Setting_TX_V", 6500),
           sideStandStatus: extractSignalValue(signals, "Display_info__Side_Stand_Sts_RX_V", 6500),
@@ -377,27 +379,27 @@ const root = {
           longitudeDirection: extractSignalValue(signals, "AL_LONG_DIR", 3101),
           gpsStatus: extractSignalValue(signals, "AL_GPS_STATUS", 3101),
           gpsFixValue: extractSignalValue(signals, "AL_GPS_FIX", 3101),
-          rideMode: extractSignalValue(signals, "MCU_Data_2__MCU_Ride_Modes_RX_V", 6502),
+          rideMode: extractSignalValue(signals, "MCU_Data_2__MCU_Ride_Modes_RX_V", 6500),
           absState: extractSignalValue(signals, "SOM_Settings_Data__ABS_State_Sel_TX_V", 6500),
-          chargingMode: extractSignalValue(signals, "Chrgr_STS_Info__Chrgr_Mode_RX_V", 6502),
-          vehicleRange: extractSignalValue(signals, "Range_Info__DTE_Range_RX_V", 6501),
-          conservativeRange: extractSignalValue(signals, "Range_Info__Cons_Range_RX_V", 6501),
-          averageRange: extractSignalValue(signals, "Range_Info__Avg_Range_RX_V", 6501),
-          aggressiveRange: extractSignalValue(signals, "Range_Info__Agg_Range_RX_V", 6501),
+          chargingMode: extractSignalValue(signals, "Chrgr_STS_Info__Chrgr_Mode_RX_V", 6500),
+          vehicleRange: extractSignalValue(signals, "Range_Info__DTE_Range_RX_V", 6500),
+          conservativeRange: extractSignalValue(signals, "Range_Info__Cons_Range_RX_V", 6500),
+          averageRange: extractSignalValue(signals, "Range_Info__Avg_Range_RX_V", 6500),
+          aggressiveRange: extractSignalValue(signals, "Range_Info__Agg_Range_RX_V", 6500),
           rangeGain: extractSignalValue(signals, "Range_Info__Range_Gain_RX_V"),
-          batterySoc: extractSignalValue(signals, "Batt_Sts_Info__Display_SoC_RX_V", 6503),
+          batterySoc: extractSignalValue(signals, "Batt_Sts_Info__Display_SoC_RX_V", 6500),
           chargingStatus: getChargingStatus(signals),
           vehicleStatus: getVehicleStatus(signals),
           lockStatus: extractSignalValue(signals, "VCU_Data__Veh_Authentication_Flag_RX_V", 6500),
-          timeToChargeHrs: extractSignalValue(signals, "Batt_Limits__Time_to_Chrg_Hrs_RX_V", 6503),
-          timeToChargeMins: extractSignalValue(signals, "Batt_Limits__Time_to_Chrg_Mins_RX_V", 6503),
+          timeToChargeHrs: extractSignalValue(signals, "Batt_Limits__Time_to_Chrg_Hrs_RX_V", 6500),
+          timeToChargeMins: extractSignalValue(signals, "Batt_Limits__Time_to_Chrg_Mins_RX_V", 6500),
           absSensitivity: extractSignalValue(signals, "SOM_Settings_Data__ABS_Sensitivity_Sel_TX_V", 6500),
           powerOutputControl: extractSignalValue(signals, "Custom_Mode__Power_Output_Control_TX_V", 6500),
           throttleMapControl: extractSignalValue(signals, "Custom_Mode__Throttle_Map_Control_TX_V", 6500),
           regenCoastControl: extractSignalValue(signals, "Custom_Mode__Regen_Coast_Control_TX_V", 6500),
           regenBrakeControl: extractSignalValue(signals, "Custom_Mode__Regen_Brake_Control_TX_V", 6500),
-          batteryTempMin: extractSignalValue(signals, "Batt_Temp__Batt_Temp_Min_RX_V", 6503),
-          batteryTempMax: extractSignalValue(signals, "Batt_Temp__Batt_Temp_Max_RX_V", 6503),
+          batteryTempMin: extractSignalValue(signals, "Batt_Temp__Batt_Temp_Min_RX_V", 6500),
+          batteryTempMax: extractSignalValue(signals, "Batt_Temp__Batt_Temp_Max_RX_V", 6500),
           frontPressureLvl: extractSignalValue(signals, "Front_pressure_level", 6500),
           rearPressureLvl: extractSignalValue(signals, "Rear_pressure_level", 6500),
           frontTempLvl: extractSignalValue(signals, "Front_temperature_level", 6500),
