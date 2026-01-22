@@ -236,7 +236,7 @@ const root = {
         isPOI: true,
         tag: "Office",
       };
-      await axios.put(`${BASE_URL}/location/locations/${geoId}`, api1Payload, {
+      const api1Response = await axios.put(`${BASE_URL}/location/locations/${geoId}`, api1Payload, {
         headers: {
           accept:
             "application/com.c2c.telemetry.location.dto.v1.response.locationresponse.v1+json",
@@ -247,9 +247,13 @@ const root = {
         },
       });
 
+      // Wait for 2 seconds after successful API 1 response
+      if (api1Response.status === 200) {
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // 2-second delay
+      }
+
       // API 2 notification update
-      const api2Payload = {
-        mapping: [
+      const api2Payload = 
           {
             schedule: {},
             notification,
@@ -258,10 +262,7 @@ const root = {
             isActive: true,
             ruleExpression: "string",
             name,
-            systemId,
-          },
-        ],
-      };
+          };
       const api2Response = await axios.put(
         `${BASE_URL}/location/vehicles/${systemId}/geo-fences/${geoId}`,
         api2Payload,
