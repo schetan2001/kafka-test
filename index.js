@@ -32,25 +32,35 @@ async function getAccessToken() {
   return accessToken;
 }
 
+// --- Hardcoded VIN override for specific systemIds (only for ticket display) ---
+const SYSTEMID_TO_VIN = new Map([
+  ["ugQdkXVmh1sZMmvex2Sr0", "REPROV012308575LL"],
+  ["9cifdejJ8i_NdrAK2bEkc", "REPROV0122A431511"],
+]);
+
 async function handleKafkaMessage(payload) {
   const { systemId, dtcSnapshot, timestamp } = payload;
   if (!systemId || !Array.isArray(dtcSnapshot) || dtcSnapshot.length === 0) return;
 
+  // Use VIN only for the 2 specific systemIds; otherwise fall back to systemId
+  const vin = SYSTEMID_TO_VIN.get(systemId) || null;
+  const displayId = vin ? `VIN: ${vin}` : `systemId: ${systemId}`;
+
   try {
     const token = await getAccessToken();
     const headers = {
-      'Accept': 'application/vnd.manageengine.sdp.v3+json',
-      'Authorization': `Zoho-oauthtoken ${token}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
+      Accept: "application/vnd.manageengine.sdp.v3+json",
+      Authorization: `Zoho-oauthtoken ${token}`,
+      "Content-Type": "application/x-www-form-urlencoded",
     };
 
     for (const dtc of dtcSnapshot) {
-      const propId = dtc.propId ?? parseInt(String(dtc.triggerSignal || '').replace('ID_', ''), 10);
+      const propId = dtc.propId ?? parseInt(String(dtc.triggerSignal || "").replace("ID_", ""), 10);
       const ticketKey = `${systemId}-${propId}`;
 
       const valNum = Number(dtc.triggerValue);
-      const isActive = valNum > 0;     // create on > 0
-      const isZero = valNum === 0;     // close on == 0
+      const isActive = valNum > 0;
+      const isZero = valNum === 0;
       const ticketExists = activeTicketsCache.has(ticketKey);
 
       if (isZero && ticketExists) {
@@ -76,19 +86,23 @@ async function handleKafkaMessage(payload) {
       }
 
       if (isActive && !ticketExists) {
-        const timestampIST = new Date(timestamp).toLocaleString('en-IN', {
-          timeZone: 'Asia/Kolkata',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false
+        const timestampIST = new Date(timestamp).toLocaleString("en-IN", {
+          timeZone: "Asia/Kolkata",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
         });
-        const subject = `Flying Flea- DTC: ${dtc.dtcCode} | Category: K | ${systemId}`;
+
+        // Subject: show VIN for the 2 ids, else show systemId
+        const subject = `Flying Flea- DTC: ${dtc.dtcCode} | Category: K | ${vin || systemId}`;
+
+        // Description: show VIN for the 2 ids, else show systemId
         const description =
-          `Fault detected for systemId <b>${systemId}</b> at ${timestampIST} IST<br>` +
+          `Fault detected for <b>${displayId}</b> at ${timestampIST} IST<br>` +
           `<b>Property ID:</b> ${propId}<br>` +
           `<b>DTC:</b> ${dtc.dtcCode} - ${dtc.dtcDescription}<br>` +
           `<b>Value:</b> ${dtc.triggerValue}<br>` +
@@ -102,8 +116,8 @@ async function handleKafkaMessage(payload) {
             group: { name: "FF GRID Support" },
             description,
             requester: { email_id: "itsmadmin@royalenfield.com" },
-            template: { name: "FF GRID" }
-          }
+            template: { name: "FF GRID" },
+          },
         };
         const form = new URLSearchParams();
         form.append('input_data', JSON.stringify(ticketJsonPayload));
