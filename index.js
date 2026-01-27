@@ -86,7 +86,7 @@ async function handleKafkaMessage(payload) {
           second: '2-digit',
           hour12: false
         });
-        const subject = `DTC Alert for ${systemId} | Property ${propId} | ${dtc.dtcCode}`;
+        const subject = `Flying Flea- DTC: ${dtc.dtcCode} | Category: K | ${systemId}`;
         const description =
           `Fault detected for systemId <b>${systemId}</b> at ${timestampIST} IST<br>` +
           `<b>Property ID:</b> ${propId}<br>` +
