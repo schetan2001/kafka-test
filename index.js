@@ -4,6 +4,7 @@ const { MongoClient } = require("mongodb");
 
 const PORT = Number(process.env.PORT || 3010);
 const MONGO_URI = process.env.MONGO_URI;
+const API_KEY = process.env.API_KEY; // <-- add
 
 const DB_NAME = process.env.DB_NAME || "re-fulfilment-layer";
 const COLLECTION_NAME = process.env.COLLECTION_NAME || "common_provision_detail";
@@ -11,9 +12,21 @@ const COLLECTION_NAME = process.env.COLLECTION_NAME || "common_provision_detail"
 if (!MONGO_URI) {
   throw new Error("Missing MONGO_URI in environment.");
 }
+if (!API_KEY) {
+  throw new Error("Missing API_KEY in environment.");
+}
 
 const app = express();
 app.use(express.json());
+
+// Protect vin-map routes with API key
+app.use("/vin-map", (req, res, next) => {
+  const clientKey = req.headers["x-api-key"];
+  if (!clientKey || clientKey !== API_KEY) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+});
 
 const client = new MongoClient(MONGO_URI, {
   maxPoolSize: 10,
