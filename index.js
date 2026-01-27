@@ -4,7 +4,7 @@ const { MongoClient } = require("mongodb");
 
 const PORT = Number(process.env.PORT || 3010);
 const MONGO_URI = process.env.MONGO_URI;
-const API_KEY = process.env.API_KEY; // <-- add
+const API_KEY = process.env.API_KEY;
 
 const DB_NAME = process.env.DB_NAME || "re-fulfilment-layer";
 const COLLECTION_NAME = process.env.COLLECTION_NAME || "common_provision_detail";
@@ -34,12 +34,38 @@ const client = new MongoClient(MONGO_URI, {
 });
 
 let collection;
+let mongoConnectPromise = null; // single-flight connect
 
 async function initMongo() {
-  if (collection) return collection;
-  await client.connect();
-  const db = client.db(DB_NAME);
-  collection = db.collection(COLLECTION_NAME);
+  if (collection) {
+    console.log(`[mongo] Reusing existing collection handle: ${DB_NAME}.${COLLECTION_NAME}`);
+    return collection;
+  }
+
+  if (mongoConnectPromise) {
+    console.log("[mongo] Connection in progress (awaiting existing connect promise)...");
+    await mongoConnectPromise;
+    return collection;
+  }
+
+  console.log("[mongo] Connecting to MongoDB...");
+  mongoConnectPromise = (async () => {
+    try {
+      await client.connect();
+      console.log("[mongo] Connected successfully.");
+
+      const db = client.db(DB_NAME);
+      collection = db.collection(COLLECTION_NAME);
+      console.log(`[mongo] Collection ready: ${DB_NAME}.${COLLECTION_NAME}`);
+    } catch (err) {
+      console.error("[mongo] Connection failed:", err?.message || err);
+      throw err;
+    } finally {
+      mongoConnectPromise = null;
+    }
+  })();
+
+  await mongoConnectPromise;
   return collection;
 }
 
@@ -94,7 +120,6 @@ app.get("/vin-map", async (req, res) => {
         foundMap.set(id, { vin: d.vin ?? null });
       }
 
-      // Ensure every requested id is present in map
       const map = {};
       for (const id of systemIds) {
         map[id] = foundMap.get(id) ?? { vin: null };
@@ -191,12 +216,24 @@ app.post("/vin-map", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`mongo-provision-api listening on http://localhost:${PORT}`);
+  console.log(`mongo-provision-api listening on ${PORT}`);
 });
 
 process.on("SIGINT", async () => {
   try {
+    console.log("[mongo] Closing MongoDB connection (SIGINT)...");
     await client.close();
+    console.log("[mongo] Connection closed.");
+  } finally {
+    process.exit(0);
+  }
+});
+
+process.on("SIGTERM", async () => {
+  try {
+    console.log("[mongo] Closing MongoDB connection (SIGTERM)...");
+    await client.close();
+    console.log("[mongo] Connection closed.");
   } finally {
     process.exit(0);
   }
