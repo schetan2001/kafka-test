@@ -32,7 +32,6 @@ async function getAccessToken() {
   return accessToken;
 }
 
-// --- Hardcoded VIN override for specific systemIds (only for ticket display) ---
 const SYSTEMID_TO_VIN = new Map([
   ["ugQdkXVmh1sZMmvex2Sr0", "REPROV012308575LL"],
   ["9cifdejJ8i_NdrAK2bEkc", "REPROV0122A431511"],
@@ -42,7 +41,6 @@ async function handleKafkaMessage(payload) {
   const { systemId, dtcSnapshot, timestamp } = payload;
   if (!systemId || !Array.isArray(dtcSnapshot) || dtcSnapshot.length === 0) return;
 
-  // Use VIN only for the 2 specific systemIds; otherwise fall back to systemId
   const vin = SYSTEMID_TO_VIN.get(systemId) || null;
   const displayId = vin ? `VIN: ${vin}` : `systemId: ${systemId}`;
 
@@ -97,10 +95,8 @@ async function handleKafkaMessage(payload) {
           hour12: false,
         });
 
-        // Subject: show VIN for the 2 ids, else show systemId
         const subject = `Flying Flea- DTC: ${dtc.dtcCode} | Category: K | ${vin || systemId}`;
 
-        // Description: show VIN for the 2 ids, else show systemId
         const description =
           `Fault detected for <b>${displayId}</b> at ${timestampIST} IST<br>` +
           `<b>Property ID:</b> ${propId}<br>` +
