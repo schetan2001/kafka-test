@@ -315,6 +315,7 @@ const root = {
         stateData = {
           ignition: vehicleData.ignition,
           lastHeartBeatTime: String(lastHeartBeatTime),
+          updatedTime: String(lastHeartBeatTime),
           currentState: vehicleData.currentState,
           connectionState: vehicleData.connectionState,
           gpsFix: vehicleData.gpsFix,
@@ -406,7 +407,7 @@ const root = {
           rearTempLvl: extractSignalValue(signals, "Rear_temperature_level", 6500),
           frontBatteryLvl: extractSignalValue(signals, "Front_battery_level", 6500),
           rearBatteryLvl: extractSignalValue(signals, "Rear_battery_level", 6500),
-          updatedTime: updatedTime,
+          // updatedTime: updatedTime,
         };
       }
 
