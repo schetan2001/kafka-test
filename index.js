@@ -37,13 +37,27 @@ const SYSTEMID_TO_VIN = new Map([
   ["9cifdejJ8i_NdrAK2bEkc", "REPROV0122A431511"],
 ]);
 
+const ALLOWED_SYSTEM_IDS = new Set([...SYSTEMID_TO_VIN.keys()]);
+
+const SUPPORT_PORTAL_BASE_URL =
+  process.env.SUPPORT_PORTAL_BASE_URL || "https://wingman-portal-preprod.royalenfield.com/";
+
+function buildSupportPortalLink(vin) {
+  if (!vin) return SUPPORT_PORTAL_BASE_URL;
+  const u = new URL(SUPPORT_PORTAL_BASE_URL);
+  u.searchParams.set("vin", vin);
+  return u.toString();
+}
 
 async function handleKafkaMessage(payload) {
   const { systemId, dtcSnapshot, timestamp } = payload;
   if (!systemId || !Array.isArray(dtcSnapshot) || dtcSnapshot.length === 0) return;
 
+  if (!ALLOWED_SYSTEM_IDS.has(systemId)) return;
+
   const vin = SYSTEMID_TO_VIN.get(systemId) || null;
   const displayId = vin ? `VIN: ${vin}` : `systemId: ${systemId}`;
+  const portalLink = buildSupportPortalLink(vin);
 
   try {
     const token = await getAccessToken();
@@ -58,8 +72,8 @@ async function handleKafkaMessage(payload) {
       const ticketKey = `${systemId}-${propId}`;
 
       const valNum = Number(dtc.triggerValue);
-      const isActive = valNum > 0;     // create on > 0
-      const isZero = valNum === 0;     // close on == 0
+      const isActive = valNum > 0;
+      const isZero = valNum === 0;
       const ticketExists = activeTicketsCache.has(ticketKey);
 
       if (isZero && ticketExists) {
@@ -95,15 +109,17 @@ async function handleKafkaMessage(payload) {
           second: '2-digit',
           hour12: false
         });
+
         const subject = `Flying Flea- DTC: ${dtc.dtcCode} | Category: K | ${vin || systemId}`;
+
         const description =
-          `Fault detected for systemId <b>${displayId}</b> at ${timestampIST} IST<br>` +
+          `Fault detected for <b>${displayId}</b> at ${timestampIST} IST<br>` +
           `<b>Property ID:</b> ${propId}<br>` +
           `<b>DTC:</b> ${dtc.dtcCode} - ${dtc.dtcDescription}<br>` +
           `<b>Value:</b> ${dtc.triggerValue}<br>` +
           `<b>Priority:</b> Medium<br><br>` +
           `<b>Location Address:</b> W63G+4M5 MAIN BLOCK, 296, Rajiv Gandhi Salai, Elcot Sez, Sholinganallur, Chennai, Tamil Nadu 600119<br><br>` +
-          `<a href="https://wingman-portal-preprod.royalenfield.com/">View in Vehicle Support Portal</a>`;
+          `<a href="${portalLink}">View in Vehicle Support Portal</a>`;
 
         const ticketJsonPayload = {
           request: {
