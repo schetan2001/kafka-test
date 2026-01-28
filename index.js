@@ -40,7 +40,7 @@ const SYSTEMID_TO_VIN = new Map([
 const ALLOWED_SYSTEM_IDS = new Set([...SYSTEMID_TO_VIN.keys()]);
 
 const SUPPORT_PORTAL_BASE_URL =
-  process.env.SUPPORT_PORTAL_BASE_URL || "https://wingman-portal-preprod.royalenfield.com/";
+  process.env.SUPPORT_PORTAL_BASE_URL || "https://wingman-portal-preprod.royalenfield.com/telemetry-tracker/";
 
 function buildSupportPortalLink(vin) {
   if (!vin) return SUPPORT_PORTAL_BASE_URL;
