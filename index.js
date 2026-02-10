@@ -80,7 +80,6 @@ function startHttp() {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-
     res.setHeader("X-Accel-Buffering", "no");
 
     writeSse(res, { event: "connected", data: { ok: true } });
@@ -90,11 +89,11 @@ function startHttp() {
 
     const keepAlive = setInterval(() => {
       try {
-        res.write(": ping\n\n");
+        res.write("No update yet\n\n");
       } catch (_) {
         // ignore
       }
-    }, 25000);
+    }, 10000);
 
     req.on("close", () => {
       clearInterval(keepAlive);
