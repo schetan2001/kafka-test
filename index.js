@@ -89,7 +89,7 @@ function startHttp() {
 
     const keepAlive = setInterval(() => {
       try {
-        res.write("No update yet\n\n");
+        res.write(": No update yet\n\n");
       } catch (_) {
         // ignore
       }
