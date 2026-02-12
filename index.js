@@ -32,32 +32,28 @@ async function getAccessToken() {
   return accessToken;
 }
 
-const SYSTEMID_TO_VIN = new Map([
-  ["ugQdkXVmh1sZMmvex2Sr0", "REPROV012308575LL"],
-  ["9cifdejJ8i_NdrAK2bEkc", "REPROV0122A431511"],
-]);
-
-const ALLOWED_SYSTEM_IDS = new Set([...SYSTEMID_TO_VIN.keys()]);
-
 const SUPPORT_PORTAL_BASE_URL =
-  process.env.SUPPORT_PORTAL_BASE_URL || "https://wingman-portal-preprod.royalenfield.com/telemetry-tracker/";
+  process.env.SUPPORT_PORTAL_BASE_URL || "https://wingman-portal-preprod.royalenfield.com/telemetry-tracker";
 
-function buildSupportPortalLink(vin) {
-  if (!vin) return SUPPORT_PORTAL_BASE_URL;
+function buildSupportPortalLink(systemId) {
+  if (!systemId) return SUPPORT_PORTAL_BASE_URL;
   const u = new URL(SUPPORT_PORTAL_BASE_URL);
-  u.searchParams.set("vin", vin);
+  // Assuming the portal can also use systemId if VIN is not available
+  u.searchParams.set("systemId", systemId);
   return u.toString();
 }
 
 async function handleKafkaMessage(payload) {
-  const { systemId, dtcSnapshot, timestamp } = payload;
-  if (!systemId || !Array.isArray(dtcSnapshot) || dtcSnapshot.length === 0) return;
+  const { systemId, status, dtcId, dtcCode, description: dtcDescription, eventTime, severity } = payload;
 
-  if (!ALLOWED_SYSTEM_IDS.has(systemId)) return;
+  if (!systemId || !status || !dtcId || !dtcCode) {
+    console.error("Invalid message format. Missing required fields.", payload);
+    return;
+  }
 
-  const vin = SYSTEMID_TO_VIN.get(systemId) || null;
-  const displayId = vin ? `VIN: ${vin}` : `systemId: ${systemId}`;
-  const portalLink = buildSupportPortalLink(vin);
+  const portalLink = buildSupportPortalLink(systemId);
+  const ticketKey = `${systemId}-${dtcId}`;
+  const ticketExists = activeTicketsCache.has(ticketKey);
 
   try {
     const token = await getAccessToken();
@@ -67,83 +63,74 @@ async function handleKafkaMessage(payload) {
       'Content-Type': 'application/x-www-form-urlencoded'
     };
 
-    for (const dtc of dtcSnapshot) {
-      const propId = dtc.propId ?? parseInt(String(dtc.triggerSignal || '').replace('ID_', ''), 10);
-      const ticketKey = `${systemId}-${propId}`;
-
-      const valNum = Number(dtc.triggerValue);
-      const isActive = valNum > 0;
-      const isZero = valNum === 0;
-      const ticketExists = activeTicketsCache.has(ticketKey);
-
-      if (isZero && ticketExists) {
-        // --- CLOSE ticket for this property ---
-        const { ticketId } = activeTicketsCache.get(ticketKey);
-        const updateUrl = `${TICKET_API_URL}/${ticketId}`;
-        const resolutionPayload = {
-          request: {
-            status: { name: "Resolved" },
-            resolution: { content: `Fault cleared for property ${propId}. Auto-closed.` }
-          }
-        };
-        const form = new URLSearchParams();
-        form.append('input_data', JSON.stringify(resolutionPayload));
-        try {
-          await axios.put(updateUrl, form, { headers });
-          console.log(`Resolved ticket ${ticketId} for systemId=${systemId}, propId=${propId}`);
-          activeTicketsCache.delete(ticketKey);
-        } catch (e) {
-          console.error(`Failed to resolve ticket ${ticketId} for ${systemId}/${propId}:`, e.response?.data || e.message);
+    if (status === 'CLOSED' && ticketExists) {
+      // --- CLOSE ticket for this DTC ---
+      const { ticketId } = activeTicketsCache.get(ticketKey);
+      const updateUrl = `${TICKET_API_URL}/${ticketId}`;
+      const resolutionPayload = {
+        request: {
+          status: { name: "Resolved" },
+          resolution: { content: `Fault cleared for DTC ID ${dtcId}. Auto-closed.` }
         }
-        continue;
+      };
+      const form = new URLSearchParams();
+      form.append('input_data', JSON.stringify(resolutionPayload));
+      try {
+        await axios.put(updateUrl, form, { headers });
+        console.log(`Resolved ticket ${ticketId} for systemId=${systemId}, dtcId=${dtcId}`);
+        activeTicketsCache.delete(ticketKey);
+      } catch (e) {
+        console.error(`Failed to resolve ticket ${ticketId} for ${systemId}/${dtcId}:`, e.response?.data || e.message);
       }
-
-      if (isActive && !ticketExists) {
-        const timestampIST = new Date(timestamp).toLocaleString('en-IN', {
-          timeZone: 'Asia/Kolkata',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false
-        });
-
-        const subject = `Flying Flea- DTC: ${dtc.dtcCode} | Category: K | ${vin || systemId}`;
-
-        const description =
-          `Fault detected for <b>${displayId}</b> at ${timestampIST} IST<br>` +
-          `<b>Property ID:</b> ${propId}<br>` +
-          `<b>DTC:</b> ${dtc.dtcCode} - ${dtc.dtcDescription}<br>` +
-          `<b>Value:</b> ${dtc.triggerValue}<br>` +
-          `<b>Priority:</b> Medium<br><br>` +
-          `<b>Location Address:</b> W63G+4M5 MAIN BLOCK, 296, Rajiv Gandhi Salai, Elcot Sez, Sholinganallur, Chennai, Tamil Nadu 600119<br><br>` +
-          `<a href="${portalLink}">View in Vehicle Support Portal</a>`;
-
-        const ticketJsonPayload = {
-          request: {
-            subject,
-            group: { name: "FF GRID Support" },
-            description,
-            requester: { email_id: "itsmadmin@royalenfield.com" },
-            template: { name: "FF GRID" }
-          }
-        };
-        const form = new URLSearchParams();
-        form.append('input_data', JSON.stringify(ticketJsonPayload));
-
-        try {
-          const resp = await axios.post(TICKET_API_URL, form, { headers });
-          const newTicketId = resp.data.request.id;
-          console.log(`Created ticket ${newTicketId} for systemId=${systemId}, propId=${propId}`);
-          activeTicketsCache.set(ticketKey, { ticketId: newTicketId, createdAt: Date.now() });
-        } catch (e) {
-          console.error(`Failed to create ticket for ${systemId}/${propId}:`, e.response?.data || e.message);
-        }
-      }
-      // else: no state change (still active and already open, or zero without existing ticket)
+      return; // End processing for this message
     }
+
+    if (status === 'OPEN' && !ticketExists) {
+      // --- CREATE a new ticket ---
+      const timestampIST = new Date(eventTime).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+
+      const subject = `Flying Flea- DTC: ${dtcCode} | Category: K | ${systemId}`;
+
+      const description =
+        `Fault detected for <b>systemId: ${systemId}</b> at ${timestampIST} IST<br>` +
+        `<b>DTC ID:</b> ${dtcId}<br>` +
+        `<b>DTC Code:</b> ${dtcCode} - ${dtcDescription}<br>` +
+        `<b>Severity:</b> ${severity}<br><br>` +
+        `<b>Location Address:</b> W63G+4M5 MAIN BLOCK, 296, Rajiv Gandhi Salai, Elcot Sez, Sholinganallur, Chennai, Tamil Nadu 600119<br><br>` +
+        `<a href="${portalLink}">View in Vehicle Support Portal</a>`;
+
+      const ticketJsonPayload = {
+        request: {
+          subject,
+          group: { name: "FF GRID Support" },
+          description,
+          requester: { email_id: "itsmadmin@royalenfield.com" },
+          template: { name: "FF GRID" }
+        }
+      };
+      const form = new URLSearchParams();
+      form.append('input_data', JSON.stringify(ticketJsonPayload));
+
+      try {
+        const resp = await axios.post(TICKET_API_URL, form, { headers });
+        const newTicketId = resp.data.request.id;
+        console.log(`Created ticket ${newTicketId} for systemId=${systemId}, dtcId=${dtcId}`);
+        activeTicketsCache.set(ticketKey, { ticketId: newTicketId, createdAt: Date.now() });
+      } catch (e) {
+        console.error(`Failed to create ticket for ${systemId}/${dtcId}:`, e.response?.data || e.message);
+      }
+    }
+    // else: no state change (e.g., OPEN message for an already open ticket, or CLOSED for a non-existent one)
+
   } catch (err) {
     console.error("Ticket processing error:", err.message);
   }
