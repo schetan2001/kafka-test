@@ -165,6 +165,9 @@ const schema = buildSchema(`
 
   type VehicleHealthStatusResponse {
     vehicleStatus: String
+    batteryHealth: String
+    motorHealth: String
+    mcuHealth: String
   }
 
   type CampaignVersionResponse {
@@ -336,8 +339,8 @@ const root = {
 
         telemetryData = {
           ignitionStatus: extractSignalValue(signals, "VCU_Data__Ignition_Sts_RX_V", 6500),
-          hillHold: extractSignalValue(signals, "MCU_Data_2__Hill_Hold_Sts_RX_V", 6500),
-          cruiseControlStatus: extractSignalValue(signals, "MCU_Data_2__Cruise_Control_Status_RX_V", 6500),
+          hillHold: extractSignalValue(signals, "Display_info__Hill_Hold_TTL_RX_V", 6500),
+          cruiseControlStatus: extractSignalValue(signals, "Display_info__Cruise_Control_TTL_RX_V", 6500),
           tractionControl: extractSignalValue(signals, "Custom_Mode__Traction_Control_TX_V", 6500),
           regenSetting: extractSignalValue(signals, "SOM_Settings_Data__Regen_Setting_TX_V", 6500),
           sideStandStatus: extractSignalValue(signals, "Display_info__Side_Stand_Sts_RX_V", 6500),
@@ -380,7 +383,7 @@ const root = {
           longitudeDirection: extractSignalValue(signals, "AL_LONG_DIR", 3101),
           gpsStatus: extractSignalValue(signals, "AL_GPS_STATUS", 3101),
           gpsFixValue: extractSignalValue(signals, "AL_GPS_FIX", 3101),
-          rideMode: extractSignalValue(signals, "MCU_Data_2__MCU_Ride_Modes_RX_V", 6500),
+          rideMode: extractSignalValue(signals, "Vehicle_Mode__Ride_Mode_Set_RX_V", 6500),
           absState: extractSignalValue(signals, "SOM_Settings_Data__ABS_State_Sel_TX_V", 6500),
           chargingMode: extractSignalValue(signals, "Chrgr_STS_Info__Chrgr_Mode_RX_V", 6500),
           vehicleRange: extractSignalValue(signals, "Range_Info__DTE_Range_RX_V", 6500),
@@ -709,7 +712,12 @@ const root = {
 
       const vehicleStatus =
         response.data?.vehicleHealthReport?.vehicleStatus || null;
-      return { vehicleStatus };
+      return {
+        vehicleStatus,
+        batteryHealth: "good",
+        motorHealth: "good",
+        mcuHealth: "good",
+      };
     } catch (error) {
       console.error("Error fetching vehicle health status:", error);
       throw new Error("Failed to fetch vehicle health status");
