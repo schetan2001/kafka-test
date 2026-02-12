@@ -63,7 +63,7 @@ async function handleKafkaMessage(payload) {
 
     const ticketKey = `${systemId}-${dtcId}`;
     const ticketExists = activeTicketsCache.has(ticketKey);
-    const isCloseStatus = status.toUpperCase() === 'CLOSE';
+    const isCloseStatus = status.toUpperCase() === 'CLOSED';
     const isOpenStatus = status.toUpperCase() === 'OPEN';
 
     if (isCloseStatus && ticketExists) {
@@ -73,7 +73,7 @@ async function handleKafkaMessage(payload) {
       const resolutionPayload = {
         request: {
           status: { name: "Resolved" },
-          resolution: { content: `Fault cleared for DTC ID ${dtcId}. Auto-closed.` }
+          resolution: { content: `Fault cleared for DTC ID ${dtcId} at ${timestampIST} IST. Auto-closed.` }
         }
       };
       const form = new URLSearchParams();
