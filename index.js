@@ -70,6 +70,12 @@ async function handleKafkaMessage(payload) {
       // --- CLOSE ticket for this property ---
       const { ticketId } = activeTicketsCache.get(ticketKey);
       const updateUrl = `${TICKET_API_URL}/${ticketId}`;
+      const timestampIST = new Date(clearedAt || Date.now()).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+      });
       const resolutionPayload = {
         request: {
           status: { name: "Resolved" },
