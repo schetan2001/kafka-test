@@ -43,7 +43,7 @@ function buildSupportPortalLink(systemId) {
 }
 
 async function handleKafkaMessage(payload) {
-  const { systemId, dtcId, dtcCode, description: dtcDescription, status, eventTime, severity } = payload;
+  const { systemId, dtcId, dtcCode, description: dtcDescription, status, eventTime, severity, clearedAt } = payload;
 
   if (!systemId || !dtcId || !status) {
     console.warn("Ignoring message with missing systemId, dtcId, or status:", payload);
