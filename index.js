@@ -38,22 +38,20 @@ const SUPPORT_PORTAL_BASE_URL =
 function buildSupportPortalLink(systemId) {
   if (!systemId) return SUPPORT_PORTAL_BASE_URL;
   const u = new URL(SUPPORT_PORTAL_BASE_URL);
-  // Assuming the portal can also use systemId if VIN is not available
   u.searchParams.set("systemId", systemId);
   return u.toString();
 }
 
 async function handleKafkaMessage(payload) {
-  const { systemId, status, dtcId, dtcCode, description: dtcDescription, eventTime, severity } = payload;
+  const { systemId, dtcId, dtcCode, description: dtcDescription, status, eventTime, severity } = payload;
 
-  if (!systemId || !status || !dtcId || !dtcCode) {
-    console.error("Invalid message format. Missing required fields.", payload);
+  if (!systemId || !dtcId || !status) {
+    console.warn("Ignoring message with missing systemId, dtcId, or status:", payload);
     return;
   }
 
   const portalLink = buildSupportPortalLink(systemId);
-  const ticketKey = `${systemId}-${dtcId}`;
-  const ticketExists = activeTicketsCache.has(ticketKey);
+  const displayId = `systemId: ${systemId}`;
 
   try {
     const token = await getAccessToken();
@@ -63,8 +61,13 @@ async function handleKafkaMessage(payload) {
       'Content-Type': 'application/x-www-form-urlencoded'
     };
 
-    if (status === 'CLOSED' && ticketExists) {
-      // --- CLOSE ticket for this DTC ---
+    const ticketKey = `${systemId}-${dtcId}`;
+    const ticketExists = activeTicketsCache.has(ticketKey);
+    const isCloseStatus = status.toUpperCase() === 'CLOSE';
+    const isOpenStatus = status.toUpperCase() === 'OPEN';
+
+    if (isCloseStatus && ticketExists) {
+      // --- CLOSE ticket for this property ---
       const { ticketId } = activeTicketsCache.get(ticketKey);
       const updateUrl = `${TICKET_API_URL}/${ticketId}`;
       const resolutionPayload = {
@@ -77,31 +80,27 @@ async function handleKafkaMessage(payload) {
       form.append('input_data', JSON.stringify(resolutionPayload));
       try {
         await axios.put(updateUrl, form, { headers });
-        console.log(`Resolved ticket ${ticketId} for systemId=${systemId}, dtcId=${dtcId}`);
+        console.log(`Resolved ticket ${ticketId} for ${displayId}, dtcId=${dtcId}`);
         activeTicketsCache.delete(ticketKey);
       } catch (e) {
-        console.error(`Failed to resolve ticket ${ticketId} for ${systemId}/${dtcId}:`, e.response?.data || e.message);
+        console.error(`Failed to resolve ticket ${ticketId} for ${displayId}, dtcId=${dtcId}:`, e.response?.data || e.message);
       }
       return; // End processing for this message
     }
 
-    if (status === 'OPEN' && !ticketExists) {
+    if (isOpenStatus && !ticketExists) {
       // --- CREATE a new ticket ---
       const timestampIST = new Date(eventTime).toLocaleString('en-IN', {
         timeZone: 'Asia/Kolkata',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
         hour12: false
       });
 
       const subject = `Flying Flea- DTC: ${dtcCode} | Category: K | ${systemId}`;
 
       const description =
-        `Fault detected for <b>systemId: ${systemId}</b> at ${timestampIST} IST<br>` +
+        `Fault detected for <b>${displayId}</b> at ${timestampIST} IST<br>` +
         `<b>DTC ID:</b> ${dtcId}<br>` +
         `<b>DTC Code:</b> ${dtcCode} - ${dtcDescription}<br>` +
         `<b>Severity:</b> ${severity}<br><br>` +
@@ -123,13 +122,13 @@ async function handleKafkaMessage(payload) {
       try {
         const resp = await axios.post(TICKET_API_URL, form, { headers });
         const newTicketId = resp.data.request.id;
-        console.log(`Created ticket ${newTicketId} for systemId=${systemId}, dtcId=${dtcId}`);
+        console.log(`Created ticket ${newTicketId} for ${displayId}, dtcId=${dtcId}`);
         activeTicketsCache.set(ticketKey, { ticketId: newTicketId, createdAt: Date.now() });
       } catch (e) {
-        console.error(`Failed to create ticket for ${systemId}/${dtcId}:`, e.response?.data || e.message);
+        console.error(`Failed to create ticket for ${displayId}, dtcId=${dtcId}:`, e.response?.data || e.message);
       }
     }
-    // else: no state change (e.g., OPEN message for an already open ticket, or CLOSED for a non-existent one)
+    // else: no state change (e.g., OPEN status for an already open ticket, or CLOSE for a non-existent one)
 
   } catch (err) {
     console.error("Ticket processing error:", err.message);
