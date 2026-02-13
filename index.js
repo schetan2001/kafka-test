@@ -264,7 +264,7 @@ const root = {
             name,
           };
       const api2Response = await axios.put(
-        `${BASE_URL}/location/vehicles/${systemId}/geo-fences/${geoId}`,
+        `${BASE_URL}/location/vehicles/${systemId}/geo-fences/${geoId}?action=enable`,
         api2Payload,
         {
           headers: {
