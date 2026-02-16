@@ -22,8 +22,8 @@ const kafka = new Kafka({
 const consumer = kafka.consumer({ groupId: "kafka-sse-group" });
 
 // --- SSE clients registry ---
-/** @type {Set<import('express').Response>} */
-const clients = new Set();
+/** @type {Map<import('express').Response, { systemId: string }>} */
+const clients = new Map();
 
 function writeSse(res, { event, id, data }) {
   if (id !== undefined) res.write(`id: ${id}\n`);
@@ -38,7 +38,12 @@ function writeSse(res, { event, id, data }) {
 }
 
 function broadcast(payload) {
-  for (const res of clients) {
+  const systemId = payload?.meta?.system_id;
+  if (!systemId) return;
+
+  for (const [res, client] of clients.entries()) {
+    if (client.systemId !== systemId) continue;
+
     try {
       writeSse(res, { event: "message", data: payload });
     } catch (_) {
@@ -61,7 +66,7 @@ async function startKafka() {
         const parsed = JSON.parse(raw);
         broadcast(parsed);
       } catch (_) {
-        broadcast({ raw });
+        // Ignore non-JSON messages since they cannot be filtered by systemId
       }
     },
   });
@@ -76,16 +81,27 @@ function startHttp() {
 
   // SSE endpoint
   app.get("/events", (req, res) => {
+    const systemId = String(
+      req.query.systemId ?? req.query.system_id ?? req.query.systemID ?? ""
+    ).trim();
+
+    if (!systemId) {
+      res.status(400).json({ error: "Missing required query param: systemId" });
+      return;
+    }
+
     res.status(200);
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Accel-Buffering", "no");
 
-    writeSse(res, { event: "connected", data: { ok: true } });
+    writeSse(res, { event: "connected", data: { ok: true, systemId } });
 
-    clients.add(res);
-    console.log(`SSE client connected. Total clients: ${clients.size}`);
+    clients.set(res, { systemId });
+    console.log(
+      `SSE client connected (systemId=${systemId}). Total clients: ${clients.size}`
+    );
 
     const keepAlive = setInterval(() => {
       try {
@@ -126,7 +142,7 @@ start();
 async function shutdown(signal) {
   try {
     console.log(`Received ${signal}. Shutting down...`);
-    for (const res of clients) {
+    for (const res of clients.keys()) {
       try {
         writeSse(res, { event: "shutdown", data: { ok: true } });
         res.end();
