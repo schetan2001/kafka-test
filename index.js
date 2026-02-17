@@ -4,8 +4,27 @@ const { buildSchema } = require("graphql");
 const axios = require("axios");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const { Pool } = require("pg");
 
 dotenv.config();
+
+// --- PostgreSQL Connection Pool ---
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+});
+
+pool.on('connect', () => {
+  console.log('Connected to the PostgreSQL database!');
+});
+
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+  process.exit(-1);
+});
 
 const app = express();
 app.use(express.json());
@@ -582,7 +601,6 @@ const root = {
 
   updateCustomMode: async ({ systemId, settings }) => {
     try {
-      // Validate that at least one setting is provided
       if (Object.keys(settings).length === 0) {
         throw new Error("At least one custom mode setting must be provided.");
       }
@@ -625,7 +643,6 @@ const root = {
       const url = `${BASE_URL}/cota-service/vehicle-configurations/update`;
       const valuePayload = { enabled };
 
-      // Conditionally add start and end times if they are provided
       if (startTime) {
         valuePayload.start_time = startTime;
       }
@@ -701,6 +718,31 @@ const root = {
   },
   getVehicleHealthStatus: async ({ systemId }) => {
     try {
+      const dtcQuery = `
+        SELECT severity, ecu_type
+        FROM dtc_occurrences
+        WHERE system_id = $1 AND status = 'OPEN'
+      `;
+      const { rows: openDtcs } = await pool.query(dtcQuery, [systemId]);
+
+      const getHealthStatus = (ecuType) => {
+        const componentDtcs = openDtcs.filter(dtc => dtc.ecu_type === ecuType);
+        if (componentDtcs.length === 0) {
+          return 'Good';
+        }
+        if (componentDtcs.some(dtc => dtc.severity === 'HIGH')) {
+          return 'Critical';
+        }
+        if (componentDtcs.some(dtc => dtc.severity === 'MEDIUM' || dtc.severity === 'LOW')) {
+          return 'Warning';
+        }
+        return 'Good';
+      };
+
+      const batteryHealth = getHealthStatus('BMS');
+      const motorHealth = getHealthStatus('MCU');
+      const mcuHealth = getHealthStatus('MCU');
+
       const url = `${BASE_URL}/vehicle-diagnostics/vehicles/${systemId}/health-report`;
       const response = await axios.get(url, {
         headers: {
@@ -712,11 +754,12 @@ const root = {
 
       const vehicleStatus =
         response.data?.vehicleHealthReport?.vehicleStatus || null;
+
       return {
         vehicleStatus,
-        batteryHealth: "good",
-        motorHealth: "good",
-        mcuHealth: "good",
+        batteryHealth,
+        motorHealth,
+        mcuHealth,
       };
     } catch (error) {
       console.error("Error fetching vehicle health status:", error);
