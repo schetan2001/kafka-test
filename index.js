@@ -189,7 +189,6 @@ const schema = buildSchema(`
     vehicleStatus: String
     batteryHealth: String
     motorHealth: String
-    mcuHealth: String
   }
 
   type CampaignVersionResponse {
@@ -744,7 +743,6 @@ const root = {
 
       const batteryHealth = getHealthStatus('BMS');
       const motorHealth = getHealthStatus('MCU');
-      const mcuHealth = getHealthStatus('MCU');
 
       const url = `${BASE_URL}/vehicle-diagnostics/vehicles/${systemId}/health-report`;
       const response = await axios.get(url, {
@@ -762,7 +760,6 @@ const root = {
         vehicleStatus,
         batteryHealth,
         motorHealth,
-        mcuHealth,
       };
     } catch (error) {
       console.error("Error fetching vehicle health status:", error);
