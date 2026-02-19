@@ -181,7 +181,9 @@ function broadcast(payload) {
 
   // Get or create buffer for this systemId
   let buffer = aggregationBuffers.get(systemId);
-  if (!buffer) {
+  const isNewBuffer = !buffer;
+  
+  if (isNewBuffer) {
     buffer = {
       faultCodes: createEcuGroupedBuffer(),
       dolParams: createEcuGroupedBuffer(),
@@ -209,11 +211,10 @@ function broadcast(payload) {
     accumulateSignals(buffer.dolParams, DOL_PARAMS_MAP, telemetryEntry.data);
   }
 
-  // Reset/start the flush timer
-  if (buffer.flushTimer) {
-    clearTimeout(buffer.flushTimer);
+  // Only set the timer once when buffer is created (don't reset on subsequent messages)
+  if (isNewBuffer) {
+    buffer.flushTimer = setTimeout(() => flushBuffer(systemId), AGGREGATION_WINDOW_MS);
   }
-  buffer.flushTimer = setTimeout(() => flushBuffer(systemId), AGGREGATION_WINDOW_MS);
 }
 
 async function startKafka() {
