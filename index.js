@@ -9,10 +9,13 @@ const cors = require("cors");
 const KAFKA_BROKER = process.env.KAFKA_BROKER;
 const INPUT_TOPIC = process.env.INPUT_TOPIC;
 const PORT = Number(process.env.PORT || 4002);
-const KAFKA_GROUP_ID = process.env.KAFKA_GROUP_ID || "graphql-subscription-group";
+const KAFKA_GROUP_ID =
+  process.env.KAFKA_GROUP_ID || "graphql-subscription-group";
 
 if (!KAFKA_BROKER || !INPUT_TOPIC) {
-  console.error("Missing required environment variables: KAFKA_BROKER, INPUT_TOPIC");
+  console.error(
+    "Missing required environment variables: KAFKA_BROKER, INPUT_TOPIC",
+  );
   process.exit(1);
 }
 
@@ -24,6 +27,10 @@ const ALLOWED_EVENT_TYPES = [6500, 6501, 3101];
 
 // GraphQL Type Definitions
 const typeDefs = `
+  type Query {
+    _empty: String
+  }
+
   type Subscription {
     vehicleTelemetryUpdated(systemId: String!): VehicleTelemetry
   }
@@ -109,7 +116,9 @@ const typeDefs = `
 // Helper function to extract value by property ID
 const extractValueById = (data, propertyId) => {
   const item = data?.find((d) => d.id === propertyId);
-  return item ? String(Array.isArray(item.value) ? item.value[0] : item.value) : null;
+  return item
+    ? String(Array.isArray(item.value) ? item.value[0] : item.value)
+    : null;
 };
 
 // Helper function to calculate LTE signal strength
@@ -122,11 +131,26 @@ const getSignalStrength = (data) => {
   const levels = ["Poor", "Fair", "Good", "Excellent"];
 
   let rsrpLevel =
-    rsrp >= -85 ? "Excellent" : rsrp >= -95 ? "Good" : rsrp >= -105 ? "Fair" : "Poor";
+    rsrp >= -85
+      ? "Excellent"
+      : rsrp >= -95
+        ? "Good"
+        : rsrp >= -105
+          ? "Fair"
+          : "Poor";
   let rsrqLevel =
-    rsrq >= -10 ? "Excellent" : rsrq >= -12 ? "Good" : rsrq >= -15 ? "Fair" : "Poor";
+    rsrq >= -10
+      ? "Excellent"
+      : rsrq >= -12
+        ? "Good"
+        : rsrq >= -15
+          ? "Fair"
+          : "Poor";
 
-  const finalIndex = Math.min(levels.indexOf(rsrpLevel), levels.indexOf(rsrqLevel));
+  const finalIndex = Math.min(
+    levels.indexOf(rsrpLevel),
+    levels.indexOf(rsrqLevel),
+  );
   return levels[finalIndex];
 };
 
@@ -164,7 +188,7 @@ const transformTelemetryData = (payload) => {
   if (!telemetryEntry?.data) return null;
 
   const eventType = telemetryEntry.event_type;
-  
+
   // Filter by allowed event types
   if (!ALLOWED_EVENT_TYPES.includes(eventType)) return null;
 
@@ -250,11 +274,16 @@ const transformTelemetryData = (payload) => {
 
 // GraphQL Resolvers
 const resolvers = {
+  Query: {
+    _empty: () => null,
+  },
   Subscription: {
     vehicleTelemetryUpdated: {
       subscribe: (_, { systemId }) => {
         console.log(`New subscription for systemId: ${systemId}`);
-        return pubsub.asyncIterator([`${VEHICLE_TELEMETRY_UPDATED}_${systemId}`]);
+        return pubsub.asyncIterator([
+          `${VEHICLE_TELEMETRY_UPDATED}_${systemId}`,
+        ]);
       },
     },
   },
@@ -284,10 +313,15 @@ async function startKafkaConsumer() {
 
           if (telemetryData) {
             // Publish to specific systemId channel
-            pubsub.publish(`${VEHICLE_TELEMETRY_UPDATED}_${telemetryData.systemId}`, {
-              vehicleTelemetryUpdated: telemetryData,
-            });
-            console.log(`Published telemetry for systemId: ${telemetryData.systemId}`);
+            pubsub.publish(
+              `${VEHICLE_TELEMETRY_UPDATED}_${telemetryData.systemId}`,
+              {
+                vehicleTelemetryUpdated: telemetryData,
+              },
+            );
+            console.log(
+              `Published telemetry for systemId: ${telemetryData.systemId}`,
+            );
           }
         } catch (error) {
           console.error("Error processing Kafka message:", error);
@@ -326,7 +360,9 @@ async function startApolloServer() {
   server.applyMiddleware({ app, path: "/graphql" });
 
   httpServer.listen(PORT, () => {
-    console.log(`🚀 GraphQL Subscription Server ready at ${PORT}${server.graphqlPath}`);
+    console.log(
+      `🚀 GraphQL Subscription Server ready at ${PORT}${server.graphqlPath}`,
+    );
     console.log(`📡 WebSocket endpoint: ${PORT}${server.graphqlPath}`);
   });
 }
