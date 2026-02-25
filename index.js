@@ -5,6 +5,9 @@ const { PubSub } = require("graphql-subscriptions");
 const { Kafka } = require("kafkajs");
 const http = require("http");
 const cors = require("cors");
+const { WebSocketServer } = require("ws");
+const { useServer } = require("graphql-ws/lib/use/ws");
+const { makeExecutableSchema } = require("@graphql-tools/schema");
 
 const KAFKA_BROKER = process.env.KAFKA_BROKER;
 const INPUT_TOPIC = process.env.INPUT_TOPIC;
@@ -340,15 +343,23 @@ async function startApolloServer() {
 
   const httpServer = http.createServer(app);
 
+  const schema = makeExecutableSchema({ typeDefs, resolvers });
+
+  const wsServer = new WebSocketServer({
+    server: httpServer,
+    path: "/graphql",
+  });
+
+  const serverCleanup = useServer({ schema }, wsServer);
+
   const server = new ApolloServer({
-    typeDefs,
-    resolvers,
+    schema,
     plugins: [
       {
         async serverWillStart() {
           return {
             async drainServer() {
-              // Cleanup on shutdown
+              await serverCleanup.dispose();
             },
           };
         },
@@ -363,7 +374,7 @@ async function startApolloServer() {
     console.log(
       `🚀 GraphQL Subscription Server ready at ${PORT}${server.graphqlPath}`,
     );
-    console.log(`📡 WebSocket endpoint: ${PORT}${server.graphqlPath}`);
+    console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}${server.graphqlPath}`);
   });
 }
 
