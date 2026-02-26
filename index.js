@@ -4,20 +4,25 @@ const axios = require("axios");
 const express = require("express");
 const { MongoClient } = require("mongodb");
 // --- MongoDB Setup ---
-const MONGO_URI = process.env.MONGO_URI;
-const MONGO_DB = process.env.MONGO_DB;
-const MONGO_COLLECTION = process.env.MONGO_COLLECTION;
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://re-ff-DR:5UypPxl779QGmsCY@re-enterprise-mongo-uat.mfy7m.mongodb.net/";
+const MONGO_DB = process.env.MONGO_DB || "re_enterprise";
+const MONGO_COLLECTION = process.env.MONGO_COLLECTION || "common_provision_details";
 let mongoClient;
 
 async function getVinForSystemId(systemId) {
-  if (!mongoClient) {
-    mongoClient = new MongoClient(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
-    await mongoClient.connect();
+  try {
+    if (!mongoClient) {
+      mongoClient = new MongoClient(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+      await mongoClient.connect();
+    }
+    const db = mongoClient.db(MONGO_DB);
+    const collection = db.collection(MONGO_COLLECTION);
+    const doc = await collection.findOne({ _id: systemId });
+    return doc?.vin || null;
+  } catch (err) {
+    console.error(`MongoDB connection or query error for systemId ${systemId}:`, err.message);
+    return null;
   }
-  const db = mongoClient.db(MONGO_DB);
-  const collection = db.collection(MONGO_COLLECTION);
-  const doc = await collection.findOne({ _id: systemId });
-  return doc?.vin || null;
 }
 
 // --- Configuration ---
@@ -26,9 +31,9 @@ const KAFKA_TOPIC = process.env.KAFKA_TOPIC;
 const SERVER_PORT = process.env.SERVER_PORT || 4000;
 const TICKET_API_URL = "https://sdpondemand.manageengine.in/app/sandbox_60023490885_100725_iax/api/v3/requests";
 
-const TELEMETRY_API_URL = process.env.TELEMETRY_API_URL;
-const TELEMETRY_API_KEY = process.env.TELEMETRY_API_KEY;
-const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+const TELEMETRY_API_URL = process.env.TELEMETRY_API_URL || "https://cbp-in-uat.royalenfield.com/telemetry-curr/current-value";
+const TELEMETRY_API_KEY = process.env.TELEMETRY_API_KEY || "dgKlKWwxYban74FXtKUEqQkWJG625c1SR7WP9rnc3b0";
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || "AIzaSyCkfcEBcQQU6rNv2O2Rp-2jpc8sXuBArTc";
 const GOOGLE_REVERSE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 
 const TOKEN_API_URL = "https://accounts.zoho.in/oauth/v2/token?refresh_token=1000.de9f6a55b1bc15f3a7054cae27cbe897.efd51e07c78d8875ec84797452d45a26&grant_type=refresh_token&client_id=1000.JARQGYYRTK7II3HNYA24RJRTA3JYUU&client_secret=84fdafbd326346583d03075e0047368b594f8240da&redirect_uri=https%3A%2F%2Fsdpondemand.manageengine.in%2Fhome%2F&scope=SDPOnDemand.requests.CREATE,SDPOnDemand.requests.UPDATE";
