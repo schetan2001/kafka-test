@@ -131,7 +131,7 @@ const root = {
 };
 
 app.use(
-  "/graphql",
+  "/reapp",
   (req, res, next) => {
     const apiKey = req.headers["x-api-key"];
     const xEnv = req.headers["x-environment"];
