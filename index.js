@@ -17,7 +17,13 @@ async function getVinForSystemId(systemId) {
     }
     const db = mongoClient.db(MONGO_DB);
     const collection = db.collection(MONGO_COLLECTION);
+    console.log(`[VIN Lookup] Querying for systemId: ${systemId} in DB: ${MONGO_DB}, Collection: ${MONGO_COLLECTION}`);
     const doc = await collection.findOne({ _id: systemId });
+    if (doc) {
+      console.log(`[VIN Lookup] Found document for systemId ${systemId}:`, doc);
+    } else {
+      console.warn(`[VIN Lookup] No document found for systemId ${systemId}`);
+    }
     return doc?.vin || null;
   } catch (err) {
     console.error(`MongoDB connection or query error for systemId ${systemId}:`, err.message);
