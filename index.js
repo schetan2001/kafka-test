@@ -49,7 +49,7 @@ async function reverseGeocode(lat, lng) {
 }
 
 // --- MongoDB Setup ---
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://re-ff-DR:5UypPxl779QGmsCY@re-enterprise-mongo-uat-pri.mfy7m.mongodb.net/";
+const MONGO_URI = process.env.MONGO_URI;
 const MONGO_DB = process.env.MONGO_DB || "re-fulfilment-layer";
 const MONGO_COLLECTION = process.env.MONGO_COLLECTION || "common_provision_detail";
 let mongoClient = null;
@@ -137,7 +137,7 @@ async function handleKafkaMessage(payload) {
 
   // Fetch VIN from MongoDB
   const vin = await getVinForSystemId(systemId);
-  const portalLink = buildSupportPortalLink(systemId, vin);
+  const portalLink = buildSupportPortalLink(systemId);
   const displayId = `systemId: ${systemId}`;
 
   // Fetch location address (with fallback)
@@ -207,12 +207,12 @@ async function handleKafkaMessage(payload) {
       const subject = `Flying Flea- DTC: ${dtcCode} | Category: K | ${vin}`;
 
       const description =
-        `Fault detected for <b>${vin}</b> at ${timestampIST} IST<br>` +
-        `<b>VIN:</b> ${vin}<br>` +
-        `<b>DTC Code:</b> ${dtcCode} - ${dtcDescription}<br>` +
-        `<b>Severity:</b> ${severity}<br><br>` +
-        `<b>Location Address:</b> ${locationAddress}<br><br>` +
-        `<a href="${portalLink}">View in Vehicle Support Portal</a>`;
+      `Fault detected for <b>${vin}</b> at ${timestampIST} IST<br>` +
+      `<b>VIN:</b> ${vin}<br>` +
+      `<b>DTC Code:</b> ${dtcCode} - ${dtcDescription}<br>` +
+      `<b>Severity:</b> ${severity}<br><br>` +
+      `<b>Location Address:</b> ${locationAddress}<br><br>` +
+      `<a href="${portalLink}">View in Vehicle Support Portal</a>`;
 
       const ticketJsonPayload = {
         request: {
