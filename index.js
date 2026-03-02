@@ -137,7 +137,7 @@ async function handleKafkaMessage(payload) {
 
   // Fetch VIN from MongoDB
   const vin = await getVinForSystemId(systemId);
-  const portalLink = buildSupportPortalLink(systemId);
+  const portalLink = buildSupportPortalLink(systemId, vin);
   const displayId = `systemId: ${systemId}`;
 
   // Fetch location address (with fallback)
