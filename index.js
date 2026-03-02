@@ -49,7 +49,7 @@ async function reverseGeocode(lat, lng) {
 }
 
 // --- MongoDB Setup ---
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://re-ff-DR:5UypPxl779QGmsCY@re-enterprise-mongo-uat.mfy7m.mongodb.net/";
+const MONGO_URI = process.env.MONGO_URI;
 const MONGO_DB = process.env.MONGO_DB || "re-fulfilment-layer";
 const MONGO_COLLECTION = process.env.MONGO_COLLECTION || "common_provision_detail";
 let mongoClient = null;
@@ -58,7 +58,7 @@ let mongoDb = null;
 async function connectMongo() {
   if (mongoDb) return mongoDb;
   try {
-    mongoClient = new MongoClient(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+    mongoClient = new MongoClient(MONGO_URI);
     await mongoClient.connect();
     mongoDb = mongoClient.db(MONGO_DB);
     console.log("Connected to MongoDB");
@@ -112,13 +112,16 @@ async function getAccessToken() {
   return accessToken;
 }
 
-const SUPPORT_PORTAL_BASE_URL =
-  process.env.SUPPORT_PORTAL_BASE_URL || "https://wingman-portal-preprod.royalenfield.com/telemetry-tracker";
+const SUPPORT_PORTAL_BASE_URL = process.env.SUPPORT_PORTAL_BASE_URL || "https://tap-sit.royalenfield.com/monitoring/remote-diagnostics";
 
-function buildSupportPortalLink(systemId) {
-  if (!systemId) return SUPPORT_PORTAL_BASE_URL;
+function buildSupportPortalLink(systemId, vin) {
   const u = new URL(SUPPORT_PORTAL_BASE_URL);
-  u.searchParams.set("systemId", systemId);
+  if (vin) {
+    u.searchParams.set("vin", vin);
+  }
+  if (systemId) {
+    u.searchParams.set("systemId", systemId);
+  }
   return u.toString();
 }
 
