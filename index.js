@@ -264,7 +264,7 @@ async function handleKafkaMessage(payload) {
           description,
           requester: { email_id: "itsmadmin@royalenfield.com" },
           udf_fields: {
-            udf_char365: "ME3P7B6FAR1000077",
+            udf_char365: "4Y1S665848Z411439",
             udf_char371: "K",
             udf_char372: dtcCode,
           },
