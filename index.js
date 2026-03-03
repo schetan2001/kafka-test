@@ -5,11 +5,13 @@ const express = require("express");
 const { MongoClient } = require("mongodb");
 
 // --- Location Fetch and Reverse Geocode ---
-const LOCATION_API_URL = process.env.TELEMETRY_API_URL || 'https://cbp-in-uat.royalenfield.com/telemetry-curr/current-value/';
+const LOCATION_API_URL =
+  process.env.TELEMETRY_API_URL ||
+  "https://cbp-in-uat.royalenfield.com/telemetry-curr/current-value/";
 const LOCATION_API_HEADERS = {
-  'accept': '*/*',
-  'x-requestor': 'test',
-  'api-key': process.env.TELEMETRY_API_KEY
+  accept: "*/*",
+  "x-requestor": "test",
+  "api-key": process.env.TELEMETRY_API_KEY,
 };
 
 async function fetchLatLng(systemId) {
@@ -17,12 +19,12 @@ async function fetchLatLng(systemId) {
     const url = `${LOCATION_API_URL}${systemId}`;
     const resp = await axios.get(url, { headers: LOCATION_API_HEADERS });
     const signals = resp.data?.responseData?.signals || [];
-    const lat = signals.find(s => s.name === 'AL_LATITUDE')?.value;
-    const lng = signals.find(s => s.name === 'AL_LONGITUDE')?.value;
+    const lat = signals.find((s) => s.name === "AL_LATITUDE")?.value;
+    const lng = signals.find((s) => s.name === "AL_LONGITUDE")?.value;
     if (lat && lng) return { lat, lng };
     return null;
   } catch (err) {
-    console.error('Error fetching lat/lng:', err.message);
+    console.error("Error fetching lat/lng:", err.message);
     return null;
   }
 }
@@ -32,7 +34,7 @@ async function reverseGeocode(lat, lng) {
   try {
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;
     if (!apiKey) {
-      console.warn('Google Maps API key not set.');
+      console.warn("Google Maps API key not set.");
       return null;
     }
     const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
@@ -43,7 +45,7 @@ async function reverseGeocode(lat, lng) {
     }
     return null;
   } catch (err) {
-    console.error('Reverse geocoding failed:', err.message);
+    console.error("Reverse geocoding failed:", err.message);
     return null;
   }
 }
@@ -51,7 +53,8 @@ async function reverseGeocode(lat, lng) {
 // --- MongoDB Setup ---
 const MONGO_URI = process.env.MONGO_URI;
 const MONGO_DB = process.env.MONGO_DB || "re-fulfilment-layer";
-const MONGO_COLLECTION = process.env.MONGO_COLLECTION || "common_provision_detail";
+const MONGO_COLLECTION =
+  process.env.MONGO_COLLECTION || "common_provision_detail";
 let mongoClient = null;
 let mongoDb = null;
 
@@ -72,7 +75,9 @@ async function connectMongo() {
 async function getVinForSystemId(systemId) {
   try {
     const db = await connectMongo();
-    const doc = await db.collection(MONGO_COLLECTION).findOne({ _id: systemId });
+    const doc = await db
+      .collection(MONGO_COLLECTION)
+      .findOne({ _id: systemId });
     if (doc && doc.vin) {
       return doc.vin;
     }
@@ -87,12 +92,15 @@ async function getVinForSystemId(systemId) {
 const KAFKA_BROKER = process.env.KAFKA_BROKER || "localhost:9092";
 const KAFKA_TOPIC = process.env.KAFKA_TOPIC;
 const SERVER_PORT = process.env.SERVER_PORT || 4000;
-const TICKET_API_URL = "https://sdpondemand.manageengine.in/app/sandbox_60023490885_100725_iax/api/v3/requests";
+const TICKET_API_URL =
+  "https://sdpondemand.manageengine.in/app/sandbox_60023490885_100725_iax/api/v3/requests";
 
-const TOKEN_API_URL = "https://accounts.zoho.in/oauth/v2/token?refresh_token=1000.de9f6a55b1bc15f3a7054cae27cbe897.efd51e07c78d8875ec84797452d45a26&grant_type=refresh_token&client_id=1000.JARQGYYRTK7II3HNYA24RJRTA3JYUU&client_secret=84fdafbd326346583d03075e0047368b594f8240da&redirect_uri=https%3A%2F%2Fsdpondemand.manageengine.in%2Fhome%2F&scope=SDPOnDemand.requests.CREATE,SDPOnDemand.requests.UPDATE";
+const TOKEN_API_URL =
+  "https://accounts.zoho.in/oauth/v2/token?refresh_token=1000.de9f6a55b1bc15f3a7054cae27cbe897.efd51e07c78d8875ec84797452d45a26&grant_type=refresh_token&client_id=1000.JARQGYYRTK7II3HNYA24RJRTA3JYUU&client_secret=84fdafbd326346583d03075e0047368b594f8240da&redirect_uri=https%3A%2F%2Fsdpondemand.manageengine.in%2Fhome%2F&scope=SDPOnDemand.requests.CREATE,SDPOnDemand.requests.UPDATE";
 
 const TOKEN_HEADERS = {
-  Cookie: "_zcsr_tmp=dd6b6ad5-2b4d-428a-9761-f782ffa72c05; iamcsr=dd6b6ad5-2b4d-428a-9761-f782ffa72c05; zalb_6e73717622=dea4bb29906843a6fbdf3bd5c0e43d1d"
+  Cookie:
+    "_zcsr_tmp=dd6b6ad5-2b4d-428a-9761-f782ffa72c05; iamcsr=dd6b6ad5-2b4d-428a-9761-f782ffa72c05; zalb_6e73717622=dea4bb29906843a6fbdf3bd5c0e43d1d",
 };
 
 // --- In-Memory Cache for Active Tickets ---
@@ -106,13 +114,19 @@ async function getAccessToken() {
   if (accessToken && tokenExpiry && Date.now() < tokenExpiry) {
     return accessToken;
   }
-  const response = await axios.post(TOKEN_API_URL, {}, { headers: TOKEN_HEADERS });
+  const response = await axios.post(
+    TOKEN_API_URL,
+    {},
+    { headers: TOKEN_HEADERS },
+  );
   accessToken = response.data.access_token;
   tokenExpiry = Date.now() + 3600 * 1000; // 1 hour
   return accessToken;
 }
 
-const SUPPORT_PORTAL_BASE_URL = process.env.SUPPORT_PORTAL_BASE_URL || "https://tap-sit.royalenfield.com/monitoring/remote-diagnostics";
+const SUPPORT_PORTAL_BASE_URL =
+  process.env.SUPPORT_PORTAL_BASE_URL ||
+  "https://tap-sit.royalenfield.com/monitoring/remote-diagnostics";
 
 function buildSupportPortalLink(systemId, vin) {
   const u = new URL(SUPPORT_PORTAL_BASE_URL);
@@ -127,13 +141,24 @@ function buildSupportPortalLink(systemId, vin) {
 }
 
 async function handleKafkaMessage(payload) {
-  const { systemId, dtcId, dtcCode, description: dtcDescription, status, eventTime, severity, clearedAt } = payload;
+  const {
+    systemId,
+    dtcId,
+    dtcCode,
+    description: dtcDescription,
+    status,
+    eventTime,
+    severity,
+    clearedAt,
+  } = payload;
 
   if (!systemId || !dtcId || !status) {
-    console.warn("Ignoring message with missing systemId, dtcId, or status:", payload);
+    console.warn(
+      "Ignoring message with missing systemId, dtcId, or status:",
+      payload,
+    );
     return;
   }
-
 
   // Fetch VIN from MongoDB
   const vin = await getVinForSystemId(systemId);
@@ -141,7 +166,8 @@ async function handleKafkaMessage(payload) {
   const displayId = `systemId: ${systemId}`;
 
   // Fetch location address (with fallback)
-  let locationAddress = "W63G+4M5 MAIN BLOCK, 296, Rajiv Gandhi Salai, Elcot Sez, Sholinganallur, Chennai, Tamil Nadu 600119";
+  let locationAddress =
+    "W63G+4M5 MAIN BLOCK, 296, Rajiv Gandhi Salai, Elcot Sez, Sholinganallur, Chennai, Tamil Nadu 600119";
   try {
     const latlng = await fetchLatLng(systemId);
     if (latlng) {
@@ -156,63 +182,80 @@ async function handleKafkaMessage(payload) {
   try {
     const token = await getAccessToken();
     const headers = {
-      'Accept': 'application/vnd.manageengine.sdp.v3+json',
-      'Authorization': `Zoho-oauthtoken ${token}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
+      Accept: "application/vnd.manageengine.sdp.v3+json",
+      Authorization: `Zoho-oauthtoken ${token}`,
+      "Content-Type": "application/x-www-form-urlencoded",
     };
 
     const ticketKey = `${systemId}-${dtcId}`;
     const ticketExists = activeTicketsCache.has(ticketKey);
-    const isCloseStatus = status.toUpperCase() === 'CLOSED';
-    const isOpenStatus = status.toUpperCase() === 'OPEN';
+    const isCloseStatus = status.toUpperCase() === "CLOSED";
+    const isOpenStatus = status.toUpperCase() === "OPEN";
 
     if (isCloseStatus && ticketExists) {
       // --- CLOSE ticket for this property ---
       const { ticketId } = activeTicketsCache.get(ticketKey);
       const updateUrl = `${TICKET_API_URL}/${ticketId}`;
-      const timestampIST = new Date(clearedAt || Date.now()).toLocaleString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-        hour12: false
-      });
+      const timestampIST = new Date(clearedAt || Date.now()).toLocaleString(
+        "en-IN",
+        {
+          timeZone: "Asia/Kolkata",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        },
+      );
       const resolutionPayload = {
         request: {
           status: { name: "Resolved" },
-          resolution: { content: `Fault cleared for DTC ID ${dtcId} at ${timestampIST} IST. Auto-closed.` }
-        }
+          resolution: {
+            content: `Fault cleared for DTC ID ${dtcId} at ${timestampIST} IST. Auto-closed.`,
+          },
+        },
       };
       const form = new URLSearchParams();
-      form.append('input_data', JSON.stringify(resolutionPayload));
+      form.append("input_data", JSON.stringify(resolutionPayload));
       try {
         await axios.put(updateUrl, form, { headers });
-        console.log(`Resolved ticket ${ticketId} for ${displayId}, dtcId=${dtcId}`);
+        console.log(
+          `Resolved ticket ${ticketId} for ${displayId}, dtcId=${dtcId}`,
+        );
         activeTicketsCache.delete(ticketKey);
       } catch (e) {
-        console.error(`Failed to resolve ticket ${ticketId} for ${displayId}, dtcId=${dtcId}:`, e.response?.data || e.message);
+        console.error(
+          `Failed to resolve ticket ${ticketId} for ${displayId}, dtcId=${dtcId}:`,
+          e.response?.data || e.message,
+        );
       }
       return; // End processing for this message
     }
 
     if (isOpenStatus && !ticketExists) {
       // --- CREATE a new ticket ---
-      const timestampIST = new Date(eventTime).toLocaleString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-        hour12: false
+      const timestampIST = new Date(eventTime).toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
       });
-
 
       const subject = `Flying Flea- DTC: ${dtcCode} | Category: K | ${vin}`;
 
       const description =
-      `Fault detected for <b>${vin}</b> at ${timestampIST} IST<br>` +
-      `<b>VIN:</b> ${vin}<br>` +
-      `<b>DTC Code:</b> ${dtcCode} - ${dtcDescription}<br>` +
-      `<b>Severity:</b> ${severity}<br><br>` +
-      `<b>Location Address:</b> ${locationAddress}<br><br>` +
-      `<a href="${portalLink}">View in Vehicle Support Portal</a>`;
+        `Fault detected for <b>${vin}</b> at ${timestampIST} IST<br>` +
+        `<b>VIN:</b> ${vin}<br>` +
+        `<b>DTC Code:</b> ${dtcCode} - ${dtcDescription}<br>` +
+        `<b>Severity:</b> ${severity}<br><br>` +
+        `<b>Location Address:</b> ${locationAddress}<br><br>` +
+        `<a href="${portalLink}">View in Vehicle Support Portal</a>`;
 
       const ticketJsonPayload = {
         request: {
@@ -220,23 +263,35 @@ async function handleKafkaMessage(payload) {
           group: { name: "FF GRID Support" },
           description,
           requester: { email_id: "itsmadmin@royalenfield.com" },
-          template: { name: "FF GRID" }
-        }
+          udf_fields: {
+            udf_char365: "ME3P7B6FAR1000077",
+            udf_char371: "K",
+            udf_char372: dtcCode,
+          },
+          template: { name: "FF GRID" },
+        },
       };
       const form = new URLSearchParams();
-      form.append('input_data', JSON.stringify(ticketJsonPayload));
+      form.append("input_data", JSON.stringify(ticketJsonPayload));
 
       try {
         const resp = await axios.post(TICKET_API_URL, form, { headers });
         const newTicketId = resp.data.request.id;
-        console.log(`Created ticket ${newTicketId} for ${displayId}, dtcId=${dtcId}`);
-        activeTicketsCache.set(ticketKey, { ticketId: newTicketId, createdAt: Date.now() });
+        console.log(
+          `Created ticket ${newTicketId} for ${displayId}, dtcId=${dtcId}`,
+        );
+        activeTicketsCache.set(ticketKey, {
+          ticketId: newTicketId,
+          createdAt: Date.now(),
+        });
       } catch (e) {
-        console.error(`Failed to create ticket for ${displayId}, dtcId=${dtcId}:`, e.response?.data || e.message);
+        console.error(
+          `Failed to create ticket for ${displayId}, dtcId=${dtcId}:`,
+          e.response?.data || e.message,
+        );
       }
     }
     // else: no state change (e.g., OPEN status for an already open ticket, or CLOSE for a non-existent one)
-
   } catch (err) {
     console.error("Ticket processing error:", err.message);
   }
@@ -245,7 +300,7 @@ async function handleKafkaMessage(payload) {
 // Kafka consumer setup
 const kafka = new Kafka({
   clientId: "me-ticket-connector",
-  brokers: [KAFKA_BROKER]
+  brokers: [KAFKA_BROKER],
 });
 
 const consumer = kafka.consumer({ groupId: "me-ticket-connector-group" });
@@ -262,7 +317,7 @@ async function startKafkaConsumer() {
       } catch (err) {
         console.error("Invalid Kafka message:", err.message);
       }
-    }
+    },
   });
 }
 
