@@ -1,6 +1,12 @@
 const { buildSchema } = require('graphql');
 
 const schema = buildSchema(`
+  type AlertTemplate {
+    template_id: String
+    template_desc: String
+    alert_msg: String
+  }
+
   type DtcOccurrence {
     id: ID!
     dtc_id: Int
@@ -19,6 +25,7 @@ const schema = buildSchema(`
     updated_by: Int
     cleared_at: String
     ecu_type: String
+    alert_template: AlertTemplate
   }
 
   type DtcCountByEcu {

@@ -9,7 +9,7 @@ const resolvers = require('./schema/resolvers');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-
+const INGRESS_API_KEY = process.env.API_KEY;
 // ── Middleware ────────────────────────────────────────────────────
 app.use(cors());
 
@@ -19,8 +19,17 @@ app.get('/health', (_req, res) => {
 });
 
 // ── GraphQL endpoint ─────────────────────────────────────────────
+const authMiddleware = (req, res, next) => {
+    const apiKey = req.headers["x-api-key"];
+    if (!apiKey || apiKey !== INGRESS_API_KEY) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    next();
+};
+
 app.use(
-    '/graphql',
+    '/dtc',
+    authMiddleware,
     graphqlHTTP({
         schema,
         rootValue: resolvers,
@@ -28,7 +37,17 @@ app.use(
     })
 );
 
+app.use(
+    '/alert-template',
+    authMiddleware,
+    graphqlHTTP({
+        schema: require('./schema/templateTypeDefs'),
+        rootValue: require('./schema/templateResolvers'),
+        graphiql: true,
+    })
+);
+
 // ── Start server ─────────────────────────────────────────────────
 app.listen(PORT, () => {
-    console.log(`🚀 GraphQL API running at http://localhost:${PORT}/graphql`);
+    console.log(`🚀 GraphQL API running on PORT: ${PORT}`);
 });

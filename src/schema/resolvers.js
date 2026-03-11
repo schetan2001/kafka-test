@@ -38,15 +38,29 @@ const resolvers = {
             params
         );
 
-        // Get paginated data
+        // Get paginated data with template join
         const dataResult = await pool.query(
-            `SELECT * FROM dtc_occurrences ${whereClause} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+            `SELECT 
+                o.*,
+                t.template_id,
+                t.template_desc,
+                t.alert_msg
+             FROM dtc_occurrences o
+             LEFT JOIN templates t ON o.severity = t.severity
+             ${whereClause.replace(/(\w+)\s*=/g, 'o.$1 =')} 
+             ORDER BY o.created_at DESC 
+             LIMIT $${idx++} OFFSET $${idx++}`,
             [...params, limit, offset]
         );
 
         const data = dataResult.rows.map((row) => ({
             ...row,
             can_data: row.can_data ? JSON.stringify(row.can_data) : null,
+            alert_template: row.template_id ? {
+                template_id: row.template_id,
+                template_desc: row.template_desc,
+                alert_msg: row.alert_msg
+            } : null
         }));
 
         return {

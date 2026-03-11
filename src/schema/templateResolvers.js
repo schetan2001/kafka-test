@@ -1,0 +1,83 @@
+const pool = require('../db');
+
+const templateResolvers = {
+    // ── Template CRUD Operations ───────────────────────────────────
+    getTemplates: async () => {
+        const { rows } = await pool.query('SELECT * FROM templates ORDER BY created_at DESC');
+        return rows;
+    },
+
+    getTemplateById: async ({ template_id }) => {
+        const { rows } = await pool.query('SELECT * FROM templates WHERE template_id = $1', [template_id]);
+        return rows[0] || null;
+    },
+
+    createTemplate: async ({ input }) => {
+        const { template_id, severity, template_desc, alert_msg } = input;
+        try {
+            const { rows } = await pool.query(
+                `INSERT INTO templates (template_id, severity, template_desc, alert_msg, created_at)
+                 VALUES ($1, $2, $3, $4, NOW())
+                 RETURNING *`,
+                [template_id, severity, template_desc, alert_msg]
+            );
+            return rows[0];
+        } catch (error) {
+            console.error('Error creating template:', error);
+            throw new Error('Failed to create template. It might already exist.');
+        }
+    },
+
+    updateTemplate: async ({ template_id, input }) => {
+        const { severity, template_desc, alert_msg } = input;
+        
+        const fields = [];
+        const values = [];
+        let idx = 1;
+
+        if (severity !== undefined) {
+            fields.push(`severity = $${idx++}`);
+            values.push(severity);
+        }
+        if (template_desc !== undefined) {
+            fields.push(`template_desc = $${idx++}`);
+            values.push(template_desc);
+        }
+        if (alert_msg !== undefined) {
+            fields.push(`alert_msg = $${idx++}`);
+            values.push(alert_msg);
+        }
+
+        if (fields.length === 0) {
+            throw new Error('No fields to update');
+        }
+
+        fields.push(`updated_at = NOW()`);
+        
+        values.push(template_id); // The WHERE condition parameter
+
+        const { rows } = await pool.query(
+            `UPDATE templates 
+             SET ${fields.join(', ')} 
+             WHERE template_id = $${idx} 
+             RETURNING *`,
+            values
+        );
+
+        if (rows.length === 0) {
+            throw new Error('Template not found');
+        }
+
+        return rows[0];
+    },
+
+    deleteTemplate: async ({ template_id }) => {
+        const { rowCount } = await pool.query(
+            'DELETE FROM templates WHERE template_id = $1',
+            [template_id]
+        );
+        return rowCount > 0;
+    },
+};
+
+module.exports = templateResolvers;
