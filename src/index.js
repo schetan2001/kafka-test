@@ -30,6 +30,13 @@ const authMiddleware = (req, res, next) => {
 app.use(
     '/dtc',
     authMiddleware,
+    (req, res, next) => {
+        const apiKey = req.headers["x-api-key"];
+        if (!apiKey || apiKey !== INGRESS_API_KEY) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+        next();
+    },
     graphqlHTTP({
         schema,
         rootValue: resolvers,
