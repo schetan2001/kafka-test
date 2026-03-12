@@ -103,8 +103,8 @@ const schema = buildSchema(`
     getTripDetails(systemId: String!, startDate: Long, endDate: Long, offset: Int, limit: Int): TripListResponseDTO
     lastParkedLocation(systemId: String!): JSON
     getTripReplayDetails(systemId: String!, startDate: Long!, endDate: Long!, tripId: String, mergeId: String): TripReplayResponseDTO
-    deleteTrip(systemId: String!, tripId: String!): String
-    mergeTrips(systemId: String!, tripIds: [String!]!): String
+    deleteTrip(systemId: String!, tripId: String!): JSON
+    mergeTrips(systemId: String!, tripIds: [String!]!): JSON
     getTripDetailsWithAggregation(systemId: String!, startDate: Long, endDate: Long, offset: Int, limit: Int): TripListResponseDTO
     getTripReplayDetailsWithPagination(systemId: String!, startDate: Long!, endDate: Long!, tripId: String, mergeId: String, offset: Int, limit: Int): TripReplayResponseWithPaginationDTO
   }
@@ -285,7 +285,7 @@ const root = {
   },
   deleteTrip: async ({ systemId, tripId }) => {
     try {
-      const query = `mutation DeleteTrip($systemId: String!, $tripId: String!) {\n  deleteTrip(systemId: $systemId, tripId: $tripId)\n}`;
+      const query = `query DeleteTrip($systemId: String!, $tripId: String!) {\n  deleteTrip(systemId: $systemId, tripId: $tripId)\n}`;
       const variables = { systemId, tripId };
       const response = await axios.post(
         process.env.TRIP_GRAPHQL_URL,
@@ -305,7 +305,7 @@ const root = {
   },
   mergeTrips: async ({ systemId, tripIds }) => {
     try {
-      const query = `mutation MergeTrips($systemId: String!, $tripIds: [String!]!) {\n  mergeTrips(systemId: $systemId, tripIds: $tripIds)\n}`;
+      const query = `query MergeTrips($systemId: String!, $tripIds: [String!]!) {\n  mergeTrips(systemId: $systemId, tripIds: $tripIds)\n}`;
       const variables = { systemId, tripIds };
       const response = await axios.post(
         process.env.TRIP_GRAPHQL_URL,
