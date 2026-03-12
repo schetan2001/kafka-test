@@ -42,11 +42,14 @@ const resolvers = {
         const dataResult = await pool.query(
             `SELECT 
                 o.*,
+                m.dtc_name as dtc_name,
+                m.description,
                 t.template_id,
                 t.template_desc,
                 t.alert_msg
              FROM dtc_occurrences o
              LEFT JOIN templates t ON o.severity = t.severity
+             LEFT JOIN dtc_master m ON o.dtc_id = m.id
              ${whereClause.replace(/(\w+)\s*=/g, 'o.$1 =')} 
              ORDER BY o.created_at DESC 
              LIMIT $${idx++} OFFSET $${idx++}`,

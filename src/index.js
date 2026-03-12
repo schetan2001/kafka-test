@@ -54,6 +54,36 @@ app.use(
     })
 );
 
+app.use(
+    '/non-dtc-template',
+    authMiddleware,
+    graphqlHTTP({
+        schema: require('./non-dtc/templateTypeDefs'),
+        rootValue: require('./non-dtc/templateResolvers'),
+        graphiql: true,
+    })
+);
+
+app.use(
+    '/non-dtc',
+    authMiddleware,
+    graphqlHTTP({
+        schema: require('./non-dtc/typeDefs'),
+        rootValue: require('./non-dtc/resolvers'),
+        graphiql: true,
+    })
+);
+
+app.use(
+    '/alerts',
+    authMiddleware,
+    graphqlHTTP({
+        schema: require('./alerts/typeDefs'),
+        rootValue: require('./alerts/resolvers'),
+        graphiql: true,
+    })
+);
+
 // ── Start server ─────────────────────────────────────────────────
 app.listen(PORT, () => {
     console.log(`🚀 GraphQL API running on PORT: ${PORT}`);

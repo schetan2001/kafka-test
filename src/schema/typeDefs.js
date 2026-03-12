@@ -25,6 +25,8 @@ const schema = buildSchema(`
     updated_by: Int
     cleared_at: String
     ecu_type: String
+    dtc_name: String
+    description: String
     alert_template: AlertTemplate
   }
 
