@@ -3,6 +3,7 @@ const { Kafka } = require("kafkajs");
 const axios = require("axios");
 const express = require("express");
 const { MongoClient } = require("mongodb");
+const { Pool } = require("pg");
 
 // --- Location Fetch and Reverse Geocode ---
 const LOCATION_API_URL =
@@ -49,6 +50,21 @@ async function reverseGeocode(lat, lng) {
     return null;
   }
 }
+
+// --- PostgreSQL Setup ---
+const pgPool = new Pool({
+  host: process.env.PG_HOST || "localhost",
+  port: process.env.PG_PORT || 5432,
+  database: process.env.PG_DATABASE || "c2c_vehicle_diagnostic_db",
+  user: process.env.PG_USER,
+  password: process.env.PG_PASSWORD,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
 
 // --- MongoDB Setup ---
 const MONGO_URI = process.env.MONGO_URI;
@@ -225,6 +241,19 @@ async function handleKafkaMessage(payload) {
           `Resolved ticket ${ticketId} for ${displayId}, dtcId=${dtcId}`,
         );
         activeTicketsCache.delete(ticketKey);
+
+        // Update PostgreSQL
+        try {
+          const updateQuery = `
+            UPDATE ff_dtc_tickets 
+            SET ticket_status = $1, resolved_time = $2 
+            WHERE request_id = $3
+          `;
+          await pgPool.query(updateQuery, ['RESOLVED', clearedAt || Date.now(), ticketId]);
+          console.log(`Updated ticket ${ticketId} status to Resolved in database`);
+        } catch (dbErr) {
+          console.error(`Failed to update ticket ${ticketId} in database:`, dbErr.message);
+        }
       } catch (e) {
         console.error(
           `Failed to resolve ticket ${ticketId} for ${displayId}, dtcId=${dtcId}:`,
@@ -277,6 +306,9 @@ async function handleKafkaMessage(payload) {
       try {
         const resp = await axios.post(TICKET_API_URL, form, { headers });
         const newTicketId = resp.data.request.id;
+        const displayIdFromResponse = resp.data.request.display_key?.value || displayId;
+        const createdTime = resp.data.request.created_time?.value || eventTime;
+        
         console.log(
           `Created ticket ${newTicketId} for ${displayId}, dtcId=${dtcId}`,
         );
@@ -284,6 +316,34 @@ async function handleKafkaMessage(payload) {
           ticketId: newTicketId,
           createdAt: Date.now(),
         });
+
+        // Insert into PostgreSQL
+        try {
+          const insertQuery = `
+            INSERT INTO ff_dtc_tickets (
+              request_id, display_id, system_id, vin, dtc_id, dtc_code, 
+              dtc_description, ecu_type, severity, ticket_status, 
+              created_time, location_address
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          `;
+          await pgPool.query(insertQuery, [
+            newTicketId,
+            displayIdFromResponse,
+            systemId,
+            vin,
+            dtcId,
+            dtcCode,
+            dtcDescription,
+            'K', // ecu_type from udf_char371
+            severity,
+            'OPEN',
+            createdTime,
+            locationAddress
+          ]);
+          console.log(`Stored ticket ${newTicketId} in database`);
+        } catch (dbErr) {
+          console.error(`Failed to insert ticket ${newTicketId} into database:`, dbErr.message);
+        }
       } catch (e) {
         console.error(
           `Failed to create ticket for ${displayId}, dtcId=${dtcId}:`,
