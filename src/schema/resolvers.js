@@ -4,72 +4,100 @@ const resolvers = {
 
 
     // ── Filtered list with pagination ──────────────────────────────
-    dtcOccurrences: async ({ ecu_type, status, severity, dtc_code, system_id, limit = 50, offset = 0 }) => {
-        const conditions = [];
-        const params = [];
-        let idx = 1;
+    dtcOccurrences: async ({ ecu_type, status, severity, dtc_code, system_id, system_ids, limit = 50, offset = 0 }) => {
+        const fetchForSystem = async (sid) => {
+            const conditions = [];
+            const params = [];
+            let idx = 1;
 
-        if (ecu_type) {
-            conditions.push(`ecu_type = $${idx++}`);
-            params.push(ecu_type);
-        }
-        if (status) {
-            conditions.push(`status = $${idx++}`);
-            params.push(status);
-        }
-        if (severity) {
-            conditions.push(`severity = $${idx++}`);
-            params.push(severity);
-        }
-        if (dtc_code) {
-            conditions.push(`dtc_code = $${idx++}`);
-            params.push(dtc_code);
-        }
-        if (system_id) {
-            conditions.push(`system_id = $${idx++}`);
-            params.push(system_id);
-        }
+            if (ecu_type) {
+                conditions.push(`ecu_type = $${idx++}`);
+                params.push(ecu_type);
+            }
+            if (status) {
+                conditions.push(`status = $${idx++}`);
+                params.push(status);
+            }
+            if (severity) {
+                conditions.push(`severity = $${idx++}`);
+                params.push(severity);
+            }
+            if (dtc_code) {
+                conditions.push(`dtc_code = $${idx++}`);
+                params.push(dtc_code);
+            }
+            if (sid) {
+                conditions.push(`system_id = $${idx++}`);
+                params.push(sid);
+            }
 
-        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+            const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-        // Get total count
-        const countResult = await pool.query(
-            `SELECT COUNT(*) as total FROM dtc_occurrences ${whereClause}`,
-            params
-        );
+            // Get total count
+            const countResult = await pool.query(
+                `SELECT COUNT(*) as total FROM dtc_occurrences ${whereClause}`,
+                params
+            );
 
-        // Get paginated data with template join
-        const dataResult = await pool.query(
-            `SELECT 
-                o.*,
-                m.dtc_name as dtc_name,
-                m.description,
-                t.template_id,
-                t.template_desc,
-                t.alert_msg
-             FROM dtc_occurrences o
-             LEFT JOIN templates t ON o.severity = t.severity
-             LEFT JOIN dtc_master m ON o.dtc_id = m.id
-             ${whereClause.replace(/(\w+)\s*=/g, 'o.$1 =')} 
-             ORDER BY o.created_at DESC 
-             LIMIT $${idx++} OFFSET $${idx++}`,
-            [...params, limit, offset]
-        );
+            // Get paginated data with template join
+            const dataResult = await pool.query(
+                `SELECT 
+                    o.*,
+                    m.dtc_name as dtc_name,
+                    m.description,
+                    t.template_id,
+                    t.template_desc,
+                    t.alert_msg
+                 FROM dtc_occurrences o
+                 LEFT JOIN templates t ON o.severity = t.severity
+                 LEFT JOIN dtc_master m ON o.dtc_id = m.id
+                 ${whereClause.replace(/(\w+)\s*=/g, 'o.$1 =')} 
+                 ORDER BY o.created_at DESC 
+                 LIMIT $${idx++} OFFSET $${idx++}`,
+                [...params, limit, offset]
+            );
 
-        const data = dataResult.rows.map((row) => ({
-            ...row,
-            can_data: row.can_data ? JSON.stringify(row.can_data) : null,
-            alert_template: row.template_id ? {
-                template_id: row.template_id,
-                template_desc: row.template_desc,
-                alert_msg: row.alert_msg
-            } : null
-        }));
+            const data = dataResult.rows.map((row) => ({
+                ...row,
+                can_data: row.can_data ? JSON.stringify(row.can_data) : null,
+                alert_template: row.template_id ? {
+                    template_id: row.template_id,
+                    template_desc: row.template_desc,
+                    alert_msg: row.alert_msg
+                } : null
+            }));
 
-        return {
-            data,
-            total_count: parseInt(countResult.rows[0].total, 10),
+            return {
+                data,
+                total_count: parseInt(countResult.rows[0].total, 10),
+            };
         };
+
+        const ids = system_ids || (system_id ? [system_id] : []);
+
+        if (ids.length <= 1) {
+            // Standard format for 0 or 1 system_id
+            const res = await fetchForSystem(ids[0]);
+            return {
+                ...res,
+                result: null
+            };
+        } else {
+            // Multi-system format
+            const results = await Promise.all(ids.map(async (sid) => {
+                const res = await fetchForSystem(sid);
+                return {
+                    system_id: sid,
+                    ...res
+                };
+            }));
+
+            return {
+                data: [],
+                total_count: 0,
+                result: results
+            };
+        }
     },
 
     // ── DTC Count by ECU (Active vs History) ───────────────────────

@@ -56,9 +56,16 @@ const schema = buildSchema(`
     non_recoverable_percentage: Float!
   }
 
+  type SystemWiseResult {
+    system_id: String
+    data: [DtcOccurrence!]!
+    total_count: Int!
+  }
+
   type DtcOccurrenceResult {
     data: [DtcOccurrence!]!
     total_count: Int!
+    result: [SystemWiseResult!]
   }
 
   type Query {
@@ -70,6 +77,7 @@ const schema = buildSchema(`
       severity: String
       dtc_code: String
       system_id: String
+      system_ids: [String]
       limit: Int
       offset: Int
     ): DtcOccurrenceResult!
