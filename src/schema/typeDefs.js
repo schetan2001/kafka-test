@@ -76,8 +76,7 @@ const schema = buildSchema(`
       status: String
       severity: String
       dtc_code: String
-      system_id: String
-      system_ids: [String]
+      system_id: [String]
       limit: Int
       offset: Int
     ): DtcOccurrenceResult!

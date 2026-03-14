@@ -84,6 +84,16 @@ app.use(
     })
 );
 
+app.use(
+    '/dtc-tickets',
+    authMiddleware,
+    graphqlHTTP({
+        schema: require('./dtc-tickets/typeDefs'),
+        rootValue: require('./dtc-tickets/resolvers'),
+        graphiql: true,
+    })
+);
+
 // ── Start server ─────────────────────────────────────────────────
 app.listen(PORT, () => {
     console.log(`🚀 GraphQL API running on PORT: ${PORT}`);
