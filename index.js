@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const { Kafka } = require("kafkajs");
 const cors = require("cors");
+const { Pool } = require("pg");
 
 const app = express();
 app.use(express.json());
@@ -11,6 +12,18 @@ const KAFKA_BROKER = process.env.KAFKA_BROKER;
 const INPUT_TOPIC = process.env.INPUT_TOPIC;
 const PORT = process.env.PORT;
 const KAFKA_GROUP_ID = process.env.KAFKA_GROUP_ID || "vehicle-tracking-sse-group";
+
+// PostgreSQL connection pool
+const pool = new Pool({
+  host: process.env.DB_HOST || "localhost",
+  port: process.env.DB_PORT || 5432,
+  database: process.env.DB_NAME || "c2c_telemetry_db",
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
 
 if (!KAFKA_BROKER || !INPUT_TOPIC) {
   console.error("Missing required environment variables: KAFKA_BROKER, INPUT_TOPIC");
@@ -27,6 +40,46 @@ const extractValueById = (data, propertyId) => {
   const item = data?.find((d) => d.id === propertyId);
   return item ? String(Array.isArray(item.value) ? item.value[0] : item.value) : null;
 };
+
+// Fetch latest GPS coordinates from database
+async function fetchLatestGPSFromDB(systemId) {
+  try {
+    const query = `
+      SELECT element_id, value, time 
+      FROM public.t_telemetry_curr_values 
+      WHERE system_id = $1 
+        AND element_id IN (559940097, 559940098) 
+        AND event_type = 3101
+    `;
+    
+    const result = await pool.query(query, [systemId]);
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const data = {};
+    result.rows.forEach(row => {
+      if (row.element_id === 559940097) {
+        data.latitude = row.value;
+        data.time = row.time; // Capture time from the row
+      } else if (row.element_id === 559940098) {
+        data.longitude = row.value;
+        if (!data.time) data.time = row.time; // Capture time if not set
+      }
+    });
+    
+    // Only return if we have both lat and lng
+    if (data.latitude && data.longitude) {
+      return data;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error(`Error fetching GPS for ${systemId} from DB:`, error.message);
+    return null;
+  }
+}
 
 const getChargingStatus = (data) => {
   const modeLvl1 = extractValueById(data, 557875295);
@@ -50,6 +103,28 @@ const getVehicleStatus = (data) => {
 
   return "Unlocked";
 };
+
+// Fetch and merge initial data for all systemIds
+async function fetchInitialData(systemIds) {
+  const initialData = {};
+  const fetchPromises = systemIds.map(async (systemId) => {
+    const cachedData = latestTelemetryData.get(systemId) || {};
+    const dbData = await fetchLatestGPSFromDB(systemId);
+    
+    // Merge cached data with fresh DB data
+    initialData[systemId] = {
+      ...cachedData,
+      systemId,
+      ...(dbData && {
+        latitude: dbData.latitude,
+        longitude: dbData.longitude
+      })
+    };
+  });
+
+  await Promise.all(fetchPromises);
+  return initialData;
+}
 
 const transformTrackingData = (payload) => {
   const systemId = payload?.meta?.system_id;
@@ -151,55 +226,7 @@ async function startKafkaConsumer() {
 }
 
 // SSE Endpoint
-app.post("/stream", (req, res) => {
-  const { systemIds } = req.body;
-
-  // Validate input
-  if (!systemIds || !Array.isArray(systemIds) || systemIds.length === 0) {
-    return res.status(400).json({
-      error: "Bad Request",
-      message: "systemIds must be a non-empty array",
-    });
-  }
-
-  // Set SSE headers
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-
-  const connectionId = `${Date.now()}-${Math.random()}`;
-
-  // Store connection
-  activeConnections.set(connectionId, {
-    res,
-    systemIds,
-    startTime: Date.now(),
-  });
-
-  console.log(`New SSE connection: ${connectionId} for systemIds: ${systemIds.join(", ")}`);
-
-  const initialData = {};
-  systemIds.forEach((systemId) => {
-    const data = latestTelemetryData.get(systemId);
-    if (data) {
-      initialData[systemId] = data;
-    }
-  });
-
-  if (Object.keys(initialData).length > 0) {
-    res.write(`data: ${JSON.stringify(initialData)}\n\n`);
-  } else {
-    res.write(`data: ${JSON.stringify({ message: "Waiting for data..." })}\n\n`);
-  }
-
-  req.on("close", () => {
-    activeConnections.delete(connectionId);
-    console.log(`SSE connection closed: ${connectionId}`);
-  });
-});
-
-app.get("/stream", (req, res) => {
+app.get("/stream", async (req, res) => {
   const systemIdsParam = req.query.systemIds;
 
   if (!systemIdsParam) {
@@ -234,19 +261,28 @@ app.get("/stream", (req, res) => {
 
   console.log(`New SSE connection: ${connectionId} for systemIds: ${systemIds.join(", ")}`);
 
-  const initialData = {};
-  systemIds.forEach((systemId) => {
-    const data = latestTelemetryData.get(systemId);
-    if (data) {
-      initialData[systemId] = data;
+  // Fetch initial GPS data from DB for all systemIds (lat/long/time)
+  const gpsData = {};
+  const fetchPromises = systemIds.map(async (systemId) => {
+    const dbData = await fetchLatestGPSFromDB(systemId);
+    if (dbData) {
+      gpsData[systemId] = {
+        latitude: dbData.latitude,
+        longitude: dbData.longitude,
+        time: dbData.time
+      };
     }
   });
 
-  if (Object.keys(initialData).length > 0) {
-    res.write(`data: ${JSON.stringify(initialData)}\n\n`);
-  } else {
-    res.write(`data: ${JSON.stringify({ message: "Waiting for data..." })}\n\n`);
-  }
+  await Promise.all(fetchPromises);
+
+  // Send connection status with GPS data
+  const connectionMessage = {
+    status: "connected",
+    data: gpsData
+  };
+
+  res.write(`data: ${JSON.stringify(connectionMessage)}\n\n`);
 
   req.on("close", () => {
     activeConnections.delete(connectionId);
@@ -264,7 +300,6 @@ app.get("/health", (req, res) => {
 
 app.listen(PORT, async () => {
   console.log(`🚀 Vehicle Tracking SSE Server running on port ${PORT}`);
-  console.log(`📡 SSE endpoint: POST http://localhost:${PORT}/stream`);
   console.log(`📡 SSE endpoint: GET http://localhost:${PORT}/stream?systemIds=id1,id2`);
   await startKafkaConsumer();
 });
