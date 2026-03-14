@@ -4,7 +4,7 @@ const resolvers = {
 
 
     // ── Filtered list with pagination ──────────────────────────────
-    dtcOccurrences: async ({ ecu_type, status, severity, dtc_code, system_id, limit = 50, offset = 0 }) => {
+    dtcOccurrences: async ({ ecu_type, status, severity, dtc_code, system_id, system_ids, limit = 50, offset = 0 }) => {
         const fetchForSystem = async (sid) => {
             const conditions = [];
             const params = [];
@@ -73,7 +73,7 @@ const resolvers = {
             };
         };
 
-        const ids = system_id || [];
+        const ids = system_ids || (system_id ? [system_id] : []);
 
         if (ids.length <= 1) {
             // Standard format for 0 or 1 system_id
