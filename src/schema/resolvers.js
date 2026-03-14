@@ -43,7 +43,7 @@ const resolvers = {
             const dataResult = await pool.query(
                 `SELECT 
                     o.*,
-                    m.name as dtc_name,
+                    m.dtc_name as dtc_name,
                     m.description,
                     t.template_id,
                     t.template_desc,
