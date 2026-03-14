@@ -28,6 +28,16 @@ const extractValueById = (data, propertyId) => {
   return item ? String(Array.isArray(item.value) ? item.value[0] : item.value) : null;
 };
 
+const getChargingStatus = (data) => {
+  const modeLvl1 = extractValueById(data, 557875295);
+  if (modeLvl1 === "5") {
+    const modeLvl2 = extractValueById(data, 557875296);
+    if (modeLvl2 === "15") return "Fast Charging";
+    if (modeLvl2 === "16") return "Slow Charging";
+  }
+  return "Not Charging";
+};
+
 const getVehicleStatus = (data) => {
   const modeLvl1 = extractValueById(data, 557875295);
   if (modeLvl1 === "4") return "Riding";
@@ -67,6 +77,7 @@ const transformTrackingData = (payload) => {
     gpsFixValue: extractValueById(data, 559988762) || existingData.gpsFixValue,
     gpsSignalStrength: extractValueById(data, 554745871) || existingData.gpsSignalStrength,
     gpsStatus: extractValueById(data, 554745870) || existingData.gpsStatus,
+    gpsSpeed: extractValueById(data, 559942149) || existingData.gpsSpeed,
     // Vehicle data from event_type 6500
     frontPressureLvl: extractValueById(data, 826314763) || existingData.frontPressureLvl,
     rearPressureLvl: extractValueById(data, 826314764) || existingData.rearPressureLvl,
@@ -79,6 +90,7 @@ const transformTrackingData = (payload) => {
     vehicleModeLvl2: extractValueById(data, 557875296) || existingData.vehicleModeLvl2,
     vehicleModeLvl3: extractValueById(data, 557875297) || existingData.vehicleModeLvl3,
     // Derived statuses
+    chargingStatus: eventType === 6500 ? getChargingStatus(data) : existingData.chargingStatus,
     vehicleStatus: eventType === 6500 ? getVehicleStatus(data) : existingData.vehicleStatus,
   };
 
