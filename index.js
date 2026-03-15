@@ -249,8 +249,9 @@ async function handleKafkaMessage(payload) {
             SET ticket_status = $1, resolved_time = $2 
             WHERE request_id = $3
           `;
-          const resolvedTimeEpoch = clearedAt ? new Date(clearedAt).getTime() : Date.now();
-          await pgPool.query(updateQuery, ['RESOLVED', resolvedTimeEpoch, ticketId]);
+          const resolvedTimeValue = clearedAt || Date.now();
+          const resolvedTime = typeof resolvedTimeValue === 'number' ? resolvedTimeValue : new Date(resolvedTimeValue).getTime();
+          await pgPool.query(updateQuery, ['RESOLVED', resolvedTime, ticketId]);
           console.log(`Updated ticket ${ticketId} status to Resolved in database`);
         } catch (dbErr) {
           console.error(`Failed to update ticket ${ticketId} in database:`, dbErr.message);
@@ -261,7 +262,7 @@ async function handleKafkaMessage(payload) {
           e.response?.data || e.message,
         );
       }
-      return;
+      return; // End processing for this message
     }
 
     if (isOpenStatus && !ticketExists) {
@@ -309,7 +310,7 @@ async function handleKafkaMessage(payload) {
         const newTicketId = resp.data.request.id;
         const displayIdFromResponse = resp.data.request.display_key?.value || displayId;
         const createdTimeValue = resp.data.request.created_time?.value || eventTime;
-        const createdTimeEpoch = typeof createdTimeValue === 'number' ? createdTimeValue : new Date(createdTimeValue).getTime();
+        const createdTime = typeof createdTimeValue === 'number' ? createdTimeValue : new Date(createdTimeValue).getTime();
         
         console.log(
           `Created ticket ${newTicketId} for ${displayId}, dtcId=${dtcId}`,
@@ -339,7 +340,7 @@ async function handleKafkaMessage(payload) {
             'K', // ecu_type from udf_char371
             severity,
             'OPEN',
-            createdTimeEpoch,
+            createdTime,
             locationAddress
           ]);
           console.log(`Stored ticket ${newTicketId} in database`);
