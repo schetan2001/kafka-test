@@ -319,6 +319,7 @@ async function handleKafkaMessage(payload) {
 
         // Insert into PostgreSQL
         const createdTime = Date.now();
+        console.log(createdTime);
         try {
           const insertQuery = `
             INSERT INTO ff_dtc_tickets (
