@@ -308,7 +308,6 @@ async function handleKafkaMessage(payload) {
         const resp = await axios.post(TICKET_API_URL, form, { headers });
         const newTicketId = resp.data.request.id;
         const displayIdFromResponse = resp.data.request.display_key?.value || displayId;
-        const createdTime = Date.now();
         
         console.log(
           `Created ticket ${newTicketId} for ${displayId}, dtcId=${dtcId}`,
@@ -319,6 +318,7 @@ async function handleKafkaMessage(payload) {
         });
 
         // Insert into PostgreSQL
+        const createdTime = Date.now();
         try {
           const insertQuery = `
             INSERT INTO ff_dtc_tickets (
