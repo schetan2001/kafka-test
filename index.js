@@ -249,8 +249,7 @@ async function handleKafkaMessage(payload) {
             SET ticket_status = $1, resolved_time = $2 
             WHERE request_id = $3
           `;
-          const resolvedTimeValue = clearedAt || Date.now();
-          const resolvedTime = typeof resolvedTimeValue === 'number' ? resolvedTimeValue : new Date(resolvedTimeValue).getTime();
+          const resolvedTime = Date.now();
           await pgPool.query(updateQuery, ['RESOLVED', resolvedTime, ticketId]);
           console.log(`Updated ticket ${ticketId} status to Resolved in database`);
         } catch (dbErr) {
@@ -309,8 +308,7 @@ async function handleKafkaMessage(payload) {
         const resp = await axios.post(TICKET_API_URL, form, { headers });
         const newTicketId = resp.data.request.id;
         const displayIdFromResponse = resp.data.request.display_key?.value || displayId;
-        const createdTimeValue = resp.data.request.created_time?.value || eventTime;
-        const createdTime = typeof createdTimeValue === 'number' ? createdTimeValue : new Date(createdTimeValue).getTime();
+        const createdTime = Date.now();
         
         console.log(
           `Created ticket ${newTicketId} for ${displayId}, dtcId=${dtcId}`,
