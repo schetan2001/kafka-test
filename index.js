@@ -1,12 +1,10 @@
 require("dotenv").config();
 const express = require("express");
 const { Kafka } = require("kafkajs");
-const cors = require("cors");
 const { Pool } = require("pg");
 
 const app = express();
 app.use(express.json());
-app.use(cors());
 
 const KAFKA_BROKER = process.env.KAFKA_BROKER;
 const INPUT_TOPIC = process.env.INPUT_TOPIC;
@@ -44,7 +42,6 @@ const extractValueById = (data, propertyId) => {
   return item ? String(Array.isArray(item.value) ? item.value[0] : item.value) : null;
 };
 
-// Fetch latest GPS coordinates from database
 async function fetchLatestGPSFromDB(systemId) {
   try {
     const query = `
@@ -65,14 +62,13 @@ async function fetchLatestGPSFromDB(systemId) {
     result.rows.forEach(row => {
       if (row.element_id === 559940097) {
         data.latitude = row.value;
-        data.time = row.time; // Capture time from the row
+        data.time = row.time;
       } else if (row.element_id === 559940098) {
         data.longitude = row.value;
-        if (!data.time) data.time = row.time; // Capture time if not set
+        if (!data.time) data.time = row.time;
       }
     });
-    
-    // Only return if we have both lat and lng
+
     if (data.latitude && data.longitude) {
       return data;
     }
@@ -107,14 +103,12 @@ const getVehicleStatus = (data) => {
   return "Unlocked";
 };
 
-// Fetch and merge initial data for all systemIds
 async function fetchInitialData(systemIds) {
   const initialData = {};
   const fetchPromises = systemIds.map(async (systemId) => {
     const cachedData = latestTelemetryData.get(systemId) || {};
     const dbData = await fetchLatestGPSFromDB(systemId);
-    
-    // Merge cached data with fresh DB data
+
     initialData[systemId] = {
       ...cachedData,
       systemId,
@@ -147,7 +141,7 @@ const transformTrackingData = (payload) => {
   const updatedData = {
     systemId,
     timestamp: telemetryEntry.time,
-    // GPS data from event_type 3101
+
     latitude: extractValueById(data, 559940097) || existingData.latitude,
     longitude: extractValueById(data, 559940098) || existingData.longitude,
     latitudeDirection: extractValueById(data, 554745874) || existingData.latitudeDirection,
@@ -156,18 +150,18 @@ const transformTrackingData = (payload) => {
     gpsSignalStrength: extractValueById(data, 554745871) || existingData.gpsSignalStrength,
     gpsStatus: extractValueById(data, 554745870) || existingData.gpsStatus,
     gpsSpeed: extractValueById(data, 559942149) || existingData.gpsSpeed,
-    // Vehicle data from event_type 6500
+
     frontPressureLvl: extractValueById(data, 826314763) || existingData.frontPressureLvl,
     rearPressureLvl: extractValueById(data, 826314764) || existingData.rearPressureLvl,
     ignitionStatus: extractValueById(data, 557875730) || existingData.ignitionStatus,
     liveOdo: extractValueById(data, 559972924) || existingData.liveOdo,
     batterySoc: extractValueById(data, 557876173) || existingData.batterySoc,
     rideMode: extractValueById(data, 557876215) || existingData.rideMode,
-    // Vehicle mode levels (used for status calculation)
+
     vehicleModeLvl1: extractValueById(data, 557875295) || existingData.vehicleModeLvl1,
     vehicleModeLvl2: extractValueById(data, 557875296) || existingData.vehicleModeLvl2,
     vehicleModeLvl3: extractValueById(data, 557875297) || existingData.vehicleModeLvl3,
-    // Derived statuses
+
     chargingStatus: eventType === 6500 ? getChargingStatus(data) : existingData.chargingStatus,
     vehicleStatus: eventType === 6500 ? getVehicleStatus(data) : existingData.vehicleStatus,
   };
@@ -286,6 +280,24 @@ app.get("/stream", async (req, res) => {
   };
 
   res.write(`data: ${JSON.stringify(connectionMessage)}\n\n`);
+
+  // Send waiting message for systemIds without Kafka data
+  const systemIdsWithoutKafkaData = systemIds.filter(systemId => !latestTelemetryData.has(systemId));
+  if (systemIdsWithoutKafkaData.length > 0) {
+    const waitingData = {};
+    systemIdsWithoutKafkaData.forEach(systemId => {
+      waitingData[systemId] = {
+        status: "waiting for data"
+      };
+    });
+    
+    const waitingMessage = {
+      status: "waiting",
+      data: waitingData
+    };
+
+    res.write(`data: ${JSON.stringify(waitingMessage)}\n\n`);
+  }
 
   req.on("close", () => {
     activeConnections.delete(connectionId);
