@@ -2,9 +2,31 @@ const pool = require('../db');
 
 const templateResolvers = {
     // ── Template CRUD Operations ───────────────────────────────────
-    getTemplates: async () => {
-        const { rows } = await pool.query('SELECT * FROM templates ORDER BY created_at DESC');
-        return rows;
+    getTemplates: async ({ search, limit = 50, offset = 0 }) => {
+        let whereClause = '';
+        const params = [];
+        let idx = 1;
+
+        if (search) {
+            whereClause = `WHERE template_id ILIKE $${idx} OR severity ILIKE $${idx} OR template_desc ILIKE $${idx} OR alert_msg ILIKE $${idx}`;
+            params.push(`%${search}%`);
+            idx++;
+        }
+
+        const countResult = await pool.query(
+            `SELECT COUNT(*) as total FROM templates ${whereClause}`,
+            params
+        );
+
+        const dataResult = await pool.query(
+            `SELECT * FROM templates ${whereClause} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+            [...params, limit, offset]
+        );
+
+        return {
+            data: dataResult.rows,
+            totalCount: parseInt(countResult.rows[0].total, 10)
+        };
     },
 
     getTemplateById: async ({ template_id }) => {
