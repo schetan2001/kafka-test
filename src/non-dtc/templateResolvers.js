@@ -2,31 +2,9 @@ const pool = require('../notificationDb');
 
 const nonDtcTemplateResolvers = {
     // ── t_app_template CRUD Operations ─────────────────────────────
-    getAppTemplates: async ({ search, limit = 50, offset = 0 }) => {
-        let whereClause = '';
-        const params = [];
-        let idx = 1;
-
-        if (search) {
-            whereClause = `WHERE template_id ILIKE $${idx} OR severity ILIKE $${idx} OR template_desc ILIKE $${idx} OR alert_msg ILIKE $${idx}`;
-            params.push(`%${search}%`);
-            idx++;
-        }
-
-        const countResult = await pool.query(
-            `SELECT COUNT(*) as total FROM c2c_notification_db.public.t_app_template ${whereClause}`,
-            params
-        );
-
-        const dataResult = await pool.query(
-            `SELECT * FROM c2c_notification_db.public.t_app_template ${whereClause} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
-            [...params, limit, offset]
-        );
-
-        return {
-            data: dataResult.rows,
-            totalCount: parseInt(countResult.rows[0].total, 10)
-        };
+    getAppTemplates: async () => {
+        const { rows } = await pool.query('SELECT * FROM c2c_notification_db.public.t_app_template ORDER BY created_at DESC');
+        return rows;
     },
 
     getAppTemplateById: async ({ template_id }) => {

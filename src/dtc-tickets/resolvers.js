@@ -27,7 +27,7 @@ const resolvers = {
             if (ecu_type) { conditions.push(`ecu_type = $${idx++}`); params.push(ecu_type); }
             if (severity) { conditions.push(`severity = $${idx++}`); params.push(severity); }
             if (ticket_status) { conditions.push(`ticket_status = $${idx++}`); params.push(ticket_status); }
-
+            
             if (sid) {
                 conditions.push(`system_id = $${idx++}`);
                 params.push(sid);
@@ -64,7 +64,11 @@ const resolvers = {
         };
 
         const ids = system_id || [];
-
+        
+        // If no IDs are provided, we could either return all data generally or require an ID.
+        // Given the requirement "minimum of 1", if none is provided but the parameter wasn't marked required in schema,
+        // we handles an empty array gracefully.
+        
         const results = await Promise.all(ids.map(async (sid) => {
             const res = await fetchForSystem(sid);
             return {

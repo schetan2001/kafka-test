@@ -23,13 +23,8 @@ const templateSchema = buildSchema(`
     alert_msg: String
   }
 
-  type TemplateResult {
-    data: [Template!]!
-    totalCount: Int!
-  }
-
   type Query {
-    getTemplates(search: String, limit: Int, offset: Int): TemplateResult!
+    getTemplates: [Template!]!
     getTemplateById(template_id: String!): Template
   }
 
