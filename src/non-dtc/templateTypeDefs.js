@@ -23,8 +23,13 @@ const nonDtcTemplateSchema = buildSchema(`
     alert_msg: String
   }
 
+  type AppTemplateResult {
+    data: [AppTemplate!]!
+    totalCount: Int!
+  }
+
   type Query {
-    getAppTemplates: [AppTemplate!]!
+    getAppTemplates(search: String, limit: Int, offset: Int): AppTemplateResult!
     getAppTemplateById(template_id: String!): AppTemplate
   }
 
