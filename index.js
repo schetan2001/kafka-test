@@ -35,7 +35,7 @@ const latestTelemetryData = new Map();
 
 const activeConnections = new Map();
 
-const ALLOWED_EVENT_TYPES = [3101, 6500];
+const ALLOWED_EVENT_TYPES = [3101, 6500, 6501];
 
 const extractValueById = (data, propertyId) => {
   const item = data?.find((d) => d.id === propertyId);
@@ -103,26 +103,6 @@ const getVehicleStatus = (data) => {
   return "Unlocked";
 };
 
-async function fetchInitialData(systemIds) {
-  const initialData = {};
-  const fetchPromises = systemIds.map(async (systemId) => {
-    const cachedData = latestTelemetryData.get(systemId) || {};
-    const dbData = await fetchLatestGPSFromDB(systemId);
-
-    initialData[systemId] = {
-      ...cachedData,
-      systemId,
-      ...(dbData && {
-        latitude: dbData.latitude,
-        longitude: dbData.longitude
-      })
-    };
-  });
-
-  await Promise.all(fetchPromises);
-  return initialData;
-}
-
 const transformTrackingData = (payload) => {
   const systemId = payload?.meta?.system_id;
   if (!systemId) return null;
@@ -157,6 +137,15 @@ const transformTrackingData = (payload) => {
     liveOdo: extractValueById(data, 559972924) || existingData.liveOdo,
     batterySoc: extractValueById(data, 557876173) || existingData.batterySoc,
     rideMode: extractValueById(data, 557876215) || existingData.rideMode,
+    battTempMax: extractValueById(data, 559972691) || existingData.battTempMax,
+    motorTemp1: extractValueById(data, 559973440) || existingData.motorTemp1,
+    motorTemp2: extractValueById(data, 557876289) || existingData.motorTemp2,
+    slcOdo: extractValueById(data, 559972896) || existingData.slcOdo,
+    slcMaxSpeed: extractValueById(data, 557875755) || existingData.slcMaxSpeed,
+    slcAvgSpeed: extractValueById(data, 557875756) || existingData.slcAvgSpeed,
+    slcAvgEff: extractValueById(data, 559972909) || existingData.slcAvgEff,
+    slcTotalEnergyConsump: extractValueById(data, 559972910) || existingData.slcTotalEnergyConsump,
+    slcDurationMins: extractValueById(data, 557875759) || existingData.slcDurationMins,
 
     vehicleModeLvl1: extractValueById(data, 557875295) || existingData.vehicleModeLvl1,
     vehicleModeLvl2: extractValueById(data, 557875296) || existingData.vehicleModeLvl2,
