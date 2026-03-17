@@ -32,8 +32,12 @@ if (!KAFKA_BROKER || !INPUT_TOPIC) {
 }
 
 const latestTelemetryData = new Map();
+const lastMessageTime = new Map();
 
 const activeConnections = new Map();
+
+// Threshold for considering data as stale
+const ACTIVE_THRESHOLD = parseInt(process.env.ACTIVE_THRESHOLD) || 90000;
 
 const ALLOWED_EVENT_TYPES = [3101, 6500, 6501];
 
@@ -184,6 +188,7 @@ async function startKafkaConsumer() {
             const { systemId } = trackingData;
 
             latestTelemetryData.set(systemId, trackingData);
+            lastMessageTime.set(systemId, Date.now());
 
             activeConnections.forEach((connection) => {
               if (connection.systemIds.includes(systemId)) {
@@ -270,21 +275,36 @@ app.get("/stream", async (req, res) => {
 
   res.write(`data: ${JSON.stringify(connectionMessage)}\n\n`);
 
-  // Send waiting message for systemIds without Kafka data
-  const systemIdsWithoutKafkaData = systemIds.filter(systemId => !latestTelemetryData.has(systemId));
-  if (systemIdsWithoutKafkaData.length > 0) {
-    const waitingData = {};
-    systemIdsWithoutKafkaData.forEach(systemId => {
+  // Check data freshness and decide whether to send cached data or waiting message
+  const cachedData = {};
+  const waitingData = {};
+  
+  systemIds.forEach(systemId => {
+    const lastTime = lastMessageTime.get(systemId);
+    const age = lastTime ? Date.now() - lastTime : Infinity;
+    
+    if (age < ACTIVE_THRESHOLD && latestTelemetryData.has(systemId)) {
+      // Data is fresh, send it immediately
+      cachedData[systemId] = latestTelemetryData.get(systemId);
+    } else {
+      // Data is stale or doesn't exist, show waiting message
       waitingData[systemId] = {
         status: "waiting for data"
       };
-    });
-    
+    }
+  });
+  
+  // Send cached data if any vehicles have fresh data
+  if (Object.keys(cachedData).length > 0) {
+    res.write(`data: ${JSON.stringify(cachedData)}\n\n`);
+  }
+  
+  // Send waiting message if any vehicles are stale or have no data
+  if (Object.keys(waitingData).length > 0) {
     const waitingMessage = {
       status: "waiting",
       data: waitingData
     };
-
     res.write(`data: ${JSON.stringify(waitingMessage)}\n\n`);
   }
 
