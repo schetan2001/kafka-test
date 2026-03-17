@@ -125,6 +125,7 @@ const schema = buildSchema(`
     slcAvgEff: String
     slcTotalEnergyConsump: String
     slcDurationMins: String
+    slcDurationHrs: String
     liveDurationHrs: String
     liveDurationMins: String
     liveMaxSpeed: String
@@ -390,6 +391,7 @@ const root = {
           slcAvgEff: extractSignalValue(signals, "VCU_Data4__SLC_Avg_Eff_RX_V", 6500),
           slcTotalEnergyConsump: extractSignalValue(signals, "VCU_Data4__SLC_Total_Energy_Consump_RX_V", 6500),
           slcDurationMins: extractSignalValue(signals, "VCU_Data4__SLC_Duration_Mins_RX_V", 6500),
+          slcDurationHrs: extractSignalValue(signals, "VCU_Data7__SLC_Duration_Hrs_RX_V", 6500),
           liveDurationHrs: extractSignalValue(signals, "VCU_Data8__Live_Duration_Hrs_RX_V", 6500),
           liveDurationMins: extractSignalValue(signals, "VCU_Data8__Live_Duration_Mins_RX_V", 6500),
           liveMaxSpeed: extractSignalValue(signals, "VCU_Data8__Live_Max_Speed_RX_V", 6500),
@@ -732,10 +734,13 @@ const root = {
         if (componentDtcs.length === 0) {
           return 'Good';
         }
-        if (componentDtcs.some(dtc => dtc.severity === 'HIGH')) {
+        if (componentDtcs.some(dtc => dtc.severity && dtc.severity.toUpperCase() === 'HIGH')) {
           return 'Critical';
         }
-        if (componentDtcs.some(dtc => dtc.severity === 'MEDIUM' || dtc.severity === 'LOW')) {
+        if (componentDtcs.some(dtc => {
+          const sev = dtc.severity ? dtc.severity.toUpperCase() : '';
+          return sev === 'MEDIUM' || sev === 'LOW';
+        })) {
           return 'Warning';
         }
         return 'Good';
