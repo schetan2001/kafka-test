@@ -14,13 +14,15 @@ const templateResolvers = {
         }
 
         const countResult = await pool.query(
-            `SELECT COUNT(*) as total FROM templates ${whereClause}`,
+            `SELECT COUNT(*) as total FROM ff_templates ${whereClause}`,
             params
         );
 
+        const actualOffset = offset > 0 ? (offset - 1) * limit : 0;
+
         const dataResult = await pool.query(
-            `SELECT * FROM templates ${whereClause} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
-            [...params, limit, offset]
+            `SELECT * FROM ff_templates ${whereClause} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+            [...params, limit, actualOffset]
         );
 
         return {
@@ -30,7 +32,7 @@ const templateResolvers = {
     },
 
     getTemplateById: async ({ template_id }) => {
-        const { rows } = await pool.query('SELECT * FROM templates WHERE template_id = $1', [template_id]);
+        const { rows } = await pool.query('SELECT * FROM ff_templates WHERE template_id = $1', [template_id]);
         return rows[0] || null;
     },
 
@@ -38,7 +40,7 @@ const templateResolvers = {
         const { template_id, severity, template_desc, alert_msg } = input;
         try {
             const { rows } = await pool.query(
-                `INSERT INTO templates (template_id, severity, template_desc, alert_msg, created_at)
+                `INSERT INTO ff_templates (template_id, severity, template_desc, alert_msg, created_at)
                  VALUES ($1, $2, $3, $4, NOW())
                  RETURNING *`,
                 [template_id, severity, template_desc, alert_msg]
@@ -79,7 +81,7 @@ const templateResolvers = {
         values.push(template_id); // The WHERE condition parameter
 
         const { rows } = await pool.query(
-            `UPDATE templates 
+            `UPDATE ff_templates 
              SET ${fields.join(', ')} 
              WHERE template_id = $${idx} 
              RETURNING *`,
@@ -95,7 +97,7 @@ const templateResolvers = {
 
     deleteTemplate: async ({ template_id }) => {
         const { rowCount } = await pool.query(
-            'DELETE FROM templates WHERE template_id = $1',
+            'DELETE FROM ff_templates WHERE template_id = $1',
             [template_id]
         );
         return rowCount > 0;

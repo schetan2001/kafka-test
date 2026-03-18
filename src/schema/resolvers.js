@@ -35,9 +35,11 @@ const resolvers = {
 
             // Get total count
             const countResult = await pool.query(
-                `SELECT COUNT(*) as total FROM dtc_occurrences ${whereClause}`,
+                `SELECT COUNT(*) as total FROM ff_dtc_occurrences ${whereClause}`,
                 params
             );
+
+            const actualOffset = offset > 0 ? (offset - 1) * limit : 0;
 
             // Get paginated data with template join
             const dataResult = await pool.query(
@@ -48,13 +50,13 @@ const resolvers = {
                     t.template_id,
                     t.template_desc,
                     t.alert_msg
-                 FROM dtc_occurrences o
-                 LEFT JOIN templates t ON o.severity = t.severity
-                 LEFT JOIN dtc_master m ON o.dtc_id = m.id
+                 FROM ff_dtc_occurrences o
+                 LEFT JOIN ff_templates t ON o.severity = t.severity
+                 LEFT JOIN ff_dtc_master m ON o.dtc_id = m.id
                  ${whereClause.replace(/(\w+)\s*=/g, 'o.$1 =')} 
                  ORDER BY o.created_at DESC 
                  LIMIT $${idx++} OFFSET $${idx++}`,
-                [...params, limit, offset]
+                [...params, limit, actualOffset]
             );
 
             const data = dataResult.rows.map((row) => ({
@@ -118,7 +120,7 @@ const resolvers = {
         ecu_type,
         COUNT(*) FILTER (WHERE status = 'OPEN')   AS active_count,
         COUNT(*) FILTER (WHERE status != 'OPEN')  AS history_count
-      FROM dtc_occurrences
+      FROM ff_dtc_occurrences
       ${whereClause}
       GROUP BY ecu_type
       ORDER BY ecu_type
@@ -152,7 +154,7 @@ const resolvers = {
         severity,
         COUNT(*)::int AS count,
         ROUND(COUNT(*) * 100.0 / NULLIF(SUM(COUNT(*)) OVER (), 0), 2) AS percentage
-      FROM dtc_occurrences
+      FROM ff_dtc_occurrences
       ${whereClause}
       GROUP BY severity
       ORDER BY severity
@@ -186,7 +188,7 @@ const resolvers = {
         CASE WHEN status = 'OPEN' THEN 'Active' ELSE 'Inactive' END AS status,
         COUNT(*)::int AS count,
         ROUND(COUNT(*) * 100.0 / NULLIF(SUM(COUNT(*)) OVER (), 0), 2) AS percentage
-      FROM dtc_occurrences
+      FROM ff_dtc_occurrences
       ${whereClause}
       GROUP BY CASE WHEN status = 'OPEN' THEN 'Active' ELSE 'Inactive' END
       ORDER BY status
@@ -220,8 +222,8 @@ const resolvers = {
         COUNT(o.*)::int AS total,
         COUNT(o.*) FILTER (WHERE m.recoverable = true)::int AS recoverable_count,
         COUNT(o.*) FILTER (WHERE m.recoverable = false OR m.recoverable IS NULL)::int AS non_recoverable_count
-      FROM dtc_occurrences o
-      LEFT JOIN dtc_master m ON o.dtc_id = m.id
+      FROM ff_dtc_occurrences o
+      LEFT JOIN ff_dtc_master m ON o.dtc_id = m.id
       ${whereClause}
     `, params);
 
@@ -258,7 +260,7 @@ const resolvers = {
 
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
         const { rows } = await pool.query(
-            `SELECT COUNT(*)::int AS total FROM dtc_occurrences ${whereClause}`,
+            `SELECT COUNT(*)::int AS total FROM ff_dtc_occurrences ${whereClause}`,
             params
         );
         return parseInt(rows[0].total, 10);

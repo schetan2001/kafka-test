@@ -41,6 +41,8 @@ const resolvers = {
                 params
             );
 
+            const actualOffset = offset > 0 ? (offset - 1) * limit : 0;
+
             // Get paginated data
             const dataResult = await pool.query(
                 `SELECT *
@@ -48,7 +50,7 @@ const resolvers = {
                  ${whereClause} 
                  ORDER BY created_time DESC 
                  LIMIT $${idx++} OFFSET $${idx++}`,
-                [...params, limit, offset]
+                [...params, limit, actualOffset]
             );
 
             const data = dataResult.rows.map(row => ({

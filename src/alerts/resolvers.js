@@ -34,8 +34,8 @@ const alertsResolvers = {
                     t.template_id,
                     t.template_desc,
                     t.alert_msg
-                FROM dtc_occurrences o
-                LEFT JOIN templates t ON o.severity = t.severity
+                FROM ff_dtc_occurrences o
+                LEFT JOIN ff_templates t ON o.severity = t.severity
                 ${dtcWhereClause}
                 ORDER BY o.created_at DESC
             `;
