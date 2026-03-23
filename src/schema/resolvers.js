@@ -51,7 +51,7 @@ const resolvers = {
                     t.template_desc,
                     t.alert_msg
                  FROM ff_dtc_occurrences o
-                 LEFT JOIN ff_templates t ON o.severity = t.severity
+                 LEFT JOIN ff_app_template t ON o.severity = t.severity
                  LEFT JOIN ff_dtc_master m ON o.dtc_id = m.id
                  ${whereClause.replace(/(\w+)\s*=/g, 'o.$1 =')} 
                  ORDER BY o.created_at DESC 
