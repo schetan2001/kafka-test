@@ -13,6 +13,9 @@ if (!KAFKA_BROKER || !INPUT_TOPIC || !OUTPUT_TOPIC || !TARGET_SYSTEM_ID) {
   );
 }
 
+// Parse comma-separated system IDs
+const TARGET_SYSTEM_IDS = TARGET_SYSTEM_ID.split(',').map(id => id.trim()).filter(id => id);
+
 // --- Kafka Client Setup ---
 const kafka = new Kafka({
   clientId: "kafka-filter-service",
@@ -35,17 +38,17 @@ async function processMessage(message) {
     inputPayload = JSON.parse(messageValue);
   } catch (err) {
     console.error("Failed to parse incoming message as JSON:", err.message);
-    return; // Ignore non-JSON messages
+    return;
   }
 
-  if (inputPayload?.cbp_a2a_header?.system_id === TARGET_SYSTEM_ID) {
+  if (inputPayload?.cbp_a2a_header?.system_id && TARGET_SYSTEM_IDS.includes(inputPayload.cbp_a2a_header.system_id)) {
     try {
       await producer.send({
         topic: OUTPUT_TOPIC,
         messages: [{ value: messageValue }],
       });
       console.log(
-        `Forwarded message for target system_id: ${TARGET_SYSTEM_ID}`
+        `Forwarded message for target system_id: ${inputPayload.cbp_a2a_header.system_id}`
       );
     } catch (err) {
       console.error("Failed to forward message to output topic:", err);
@@ -60,7 +63,7 @@ async function start() {
     await consumer.subscribe({ topic: INPUT_TOPIC, fromBeginning: false });
 
     console.log(`Connected to Kafka. Listening on topic: "${INPUT_TOPIC}"`);
-    console.log(`Filtering for system_id: "${TARGET_SYSTEM_ID}"`);
+    console.log(`Filtering for system_ids: [${TARGET_SYSTEM_IDS.join(', ')}]`);
     console.log(`Forwarding matches to topic: "${OUTPUT_TOPIC}"`);
 
     await consumer.run({
