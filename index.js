@@ -41,14 +41,14 @@ async function processMessage(message) {
     return;
   }
 
-  if (inputPayload?.cbp_a2a_header?.system_id && TARGET_SYSTEM_IDS.includes(inputPayload.cbp_a2a_header.system_id)) {
+  if (inputPayload?.meta?.system_id && TARGET_SYSTEM_IDS.includes(inputPayload.meta.system_id)) {
     try {
       await producer.send({
         topic: OUTPUT_TOPIC,
         messages: [{ value: messageValue }],
       });
       console.log(
-        `Forwarded message for target system_id: ${inputPayload.cbp_a2a_header.system_id}`
+        `Forwarded message for target system_id: ${inputPayload.meta.system_id}`
       );
     } catch (err) {
       console.error("Failed to forward message to output topic:", err);
