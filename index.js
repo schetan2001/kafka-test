@@ -13,7 +13,12 @@ app.use(cors());
 
 const INGRESS_API_KEY = process.env.API_KEY || "dashboard-api-key";
 const PORT = process.env.PORT || 4010;
-
+const BASE_URL = process.env.BASE_URL;
+const GEOFENCE_API_KEY = process.env.GEOFENCE_API_KEY;
+const TRIP_EVENTS_SUMMARY_API_KEY = process.env.TRIP_EVENTS_SUMMARY_API_KEY;
+const COMPOSITE_API_URL = process.env.COMPOSITE_API_URL;
+const COMPOSITE_API_KEY = process.env.COMPOSITE_API_KEY;
+const LAST_PARKED_API_KEY = process.env.LAST_PARKED_API_KEY;
 const schema = buildSchema(`
   scalar Long
   scalar JSON
@@ -27,6 +32,7 @@ const schema = buildSchema(`
   type TripDTO {
     tripId: String
     systemId: String
+    modelCode: String
     tripStatus: String
     tripStartDate: Long
     tripEndDate: Long
@@ -48,6 +54,7 @@ const schema = buildSchema(`
     batteryConsumed: Float
     tripBatteryEfficiency: Float
     tripType: String
+    trips: [String]
     tripStartLoc: TripLocation
     tripEndLoc: TripLocation
   }
@@ -97,6 +104,10 @@ const schema = buildSchema(`
 
   type Mutation {
     mergeUnmergeTrips(action: String!, systemId: String!, mergeGroups: [MergeGroupInput!]!): JSON
+    createGeofence(name: String!, radius: Int!, coordinates: [[Float!]!]!, systemId: String!, notification: Int!): JSON
+    updateGeofence(geoId: String!, name: String!, radius: Int!, coordinates: [[Float!]!]!, systemId: String!, notification: Int!): JSON
+    deleteGeofence(geoId: String!): JSON
+    enabledisableGeofence(systemId: String!, geoId: String!, action: String!): JSON
   }
 
   type Query {
@@ -104,13 +115,13 @@ const schema = buildSchema(`
     lastParkedLocation(systemId: String!): JSON
     getTripReplayDetails(systemId: String!, startDate: Long!, endDate: Long!, tripId: String, mergeId: String): TripReplayResponseDTO
     deleteTrip(systemId: String!, tripId: String!): JSON
-    mergeTrips(systemId: String!, tripIds: [String!]!): JSON
-    getTripDetailsWithAggregation(systemId: String!, startDate: Long, endDate: Long, offset: Int, limit: Int): TripListResponseDTO
+    getTripDetailsWithAggregation(systemId: String!, startDate: Long!, endDate: Long!, offset: Int, limit: Int): TripListResponseDTO
     getTripReplayDetailsWithPagination(systemId: String!, startDate: Long!, endDate: Long!, tripId: String, mergeId: String, offset: Int, limit: Int): TripReplayResponseWithPaginationDTO
+    getTripSummary(systemId: String!, startDate: Long!, endDate: Long!): JSON
+    getGeoFences(systemId: String!): JSON
   }
 `);
 
-// Custom Long scalar implementation
 const LongScalar = new GraphQLScalarType({
   name: "Long",
   description: "Custom scalar type for 64-bit integers",
@@ -134,7 +145,7 @@ const LongScalar = new GraphQLScalarType({
 const root = {
   mergeUnmergeTrips: async ({ action, systemId, mergeGroups }) => {
     try {
-      const url = `https://cbp-in-uat.royalenfield.com/asset-management/trips/merge-unmerge?action=${encodeURIComponent(action)}`;
+      const url = `${BASE_URL}/asset-management/trips/merge-unmerge?action=${encodeURIComponent(action)}`;
       const response = await axios.put(
         url,
         { systemId, mergeGroups },
@@ -142,7 +153,7 @@ const root = {
           headers: {
             accept: "*/*",
             "x-requestor": "abc",
-            "api-key": process.env.MERGE_UNMERGE_API_KEY,
+            "api-key": TRIP_EVENTS_SUMMARY_API_KEY,
             "Content-Type": "application/json",
           },
         },
@@ -162,12 +173,12 @@ const root = {
       if (offset !== undefined) variables.offset = offset;
       if (limit !== undefined) variables.limit = limit;
       const response = await axios.post(
-        process.env.TRIP_GRAPHQL_URL,
+        COMPOSITE_API_URL,
         { query, variables },
         {
           headers: {
             "Content-Type": "application/json",
-            "api-key": process.env.TRIP_GRAPHQL_API_KEY,
+            "api-key": COMPOSITE_API_KEY,
             "x-requestor": "test",
           },
         },
@@ -185,25 +196,42 @@ const root = {
     limit,
   }) => {
     try {
-      const query = `query GetTripDetailsWithAggregation($systemId: String!, $startDate: Long, $endDate: Long, $offset: Int, $limit: Int) {\n  getTripDetailsWithAggregation(systemId: $systemId, startDate: $startDate, endDate: $endDate, offset: $offset, limit: $limit) {\n    offset\n    limit\n    totalRecords\n    message\n    tripList {\n      tripId\n      systemId\n      tripStatus\n      tripStartDate\n      tripEndDate\n      tripDuration\n      distance\n      runningTime\n      idlingTime\n      overspeedCount\n      averageSpeed\n      topSpeed\n      harshBreakers\n      harshAcceleration\n      navigation\n      mergeId\n      driverId\n      fleetId\n      tripFuelEfficiency\n      fuelConsumed\n      batteryConsumed\n      tripBatteryEfficiency\n      tripType\n      tripStartLoc {\n        longitude\n        latitude\n        altitude\n      }\n      tripEndLoc {\n        longitude\n        latitude\n        altitude\n      }\n    }\n  }\n}`;
+      const query = `query GetTripDetailsWithAggregation($systemId: String!, $startDate: Long!, $endDate: Long!, $offset: Int, $limit: Int) {\n  getTripDetailsWithAggregation(systemId: $systemId, startDate: $startDate, endDate: $endDate, offset: $offset, limit: $limit) {\n    offset\n    limit\n    totalRecords\n    message\n    tripList {\n      tripId\n      systemId\n      modelCode\n      tripStatus\n      tripStartDate\n      tripEndDate\n      tripDuration\n      distance\n      runningTime\n      idlingTime\n      overspeedCount\n      averageSpeed\n      topSpeed\n      harshBreakers\n      harshAcceleration\n      navigation\n      mergeId\n      driverId\n      fleetId\n      tripFuelEfficiency\n      fuelConsumed\n      batteryConsumed\n      tripBatteryEfficiency\n      tripType\n      trips\n      tripStartLoc {\n        longitude\n        latitude\n        altitude\n      }\n      tripEndLoc {\n        longitude\n        latitude\n        altitude\n      }\n    }\n  }\n}`;
       const variables = { systemId };
       if (startDate !== undefined) variables.startDate = startDate;
       if (endDate !== undefined) variables.endDate = endDate;
       if (offset !== undefined) variables.offset = offset;
       if (limit !== undefined) variables.limit = limit;
+      
+      console.log('getTripDetailsWithAggregation - Variables:', JSON.stringify(variables));
+      
       const response = await axios.post(
-        process.env.TRIP_GRAPHQL_URL,
+        COMPOSITE_API_URL,
         { query, variables },
         {
           headers: {
             "Content-Type": "application/json",
-            "api-key": process.env.TRIP_GRAPHQL_API_KEY,
+            "api-key": COMPOSITE_API_KEY,
             "x-requestor": "test",
           },
         },
       );
-      return response.data?.data?.getTripDetailsWithAggregation || null;
+      
+      console.log('getTripDetailsWithAggregation - Response Status:', response.status);
+      console.log('getTripDetailsWithAggregation - Response Data:', JSON.stringify(response.data, null, 2));
+      
+      if (response.data?.errors) {
+        console.log('getTripDetailsWithAggregation - Errors found in base API response, but returning data anyway');
+      }
+      
+      const result = response.data?.data?.getTripDetailsWithAggregation;
+      console.log('getTripDetailsWithAggregation - Returning:', JSON.stringify(result, null, 2));
+      return result || null;
     } catch (error) {
+      console.error('getTripDetailsWithAggregation - Error:', error.message);
+      if (error.response) {
+        console.error('getTripDetailsWithAggregation - Error Response:', JSON.stringify(error.response.data, null, 2));
+      }
       return error.response?.data || { message: error.message };
     }
   },
@@ -224,12 +252,12 @@ const root = {
       if (offset !== undefined) variables.offset = offset;
       if (limit !== undefined) variables.limit = limit;
       const response = await axios.post(
-        process.env.TRIP_GRAPHQL_URL,
+        COMPOSITE_API_URL,
         { query, variables },
         {
           headers: {
             "Content-Type": "application/json",
-            "api-key": process.env.TRIP_GRAPHQL_API_KEY,
+            "api-key": COMPOSITE_API_KEY,
             "x-requestor": "test",
           },
         },
@@ -241,13 +269,13 @@ const root = {
   },
   lastParkedLocation: async ({ systemId }) => {
     try {
-      const url = `${process.env.BASE_URL}/telemetry-curr/vehicles/${systemId}/last-parked-location`;
+      const url = `${BASE_URL}/telemetry-curr/vehicles/${systemId}/last-parked-location`;
       const response = await axios.get(url, {
         headers: {
           accept:
             "application/com.c2c.telemetry.dto.v1.telemetryresponse.v1+json",
           "x-requestor": "test",
-          "api-key": process.env.LAST_PARKED_API_KEY,
+          "api-key": LAST_PARKED_API_KEY,
         },
       });
       return response.data;
@@ -268,12 +296,12 @@ const root = {
       if (tripId !== undefined) variables.tripId = tripId;
       if (mergeId !== undefined) variables.mergeId = mergeId;
       const response = await axios.post(
-        process.env.TRIP_GRAPHQL_URL,
+        COMPOSITE_API_URL,
         { query, variables },
         {
           headers: {
             "Content-Type": "application/json",
-            "api-key": process.env.TRIP_GRAPHQL_API_KEY,
+            "api-key": COMPOSITE_API_KEY,
             "x-requestor": "test",
           },
         },
@@ -288,12 +316,12 @@ const root = {
       const query = `query DeleteTrip($systemId: String!, $tripId: String!) {\n  deleteTrip(systemId: $systemId, tripId: $tripId)\n}`;
       const variables = { systemId, tripId };
       const response = await axios.post(
-        process.env.TRIP_GRAPHQL_URL,
+        COMPOSITE_API_URL,
         { query, variables },
         {
           headers: {
             "Content-Type": "application/json",
-            "api-key": process.env.TRIP_GRAPHQL_API_KEY,
+            "api-key": COMPOSITE_API_KEY,
             "x-requestor": "test",
           },
         },
@@ -303,22 +331,264 @@ const root = {
       return error.response?.data || { message: error.message };
     }
   },
-  mergeTrips: async ({ systemId, tripIds }) => {
+  getTripSummary: async ({ systemId, startDate, endDate }) => {
     try {
-      const query = `query MergeTrips($systemId: String!, $tripIds: [String!]!) {\n  mergeTrips(systemId: $systemId, tripIds: $tripIds)\n}`;
-      const variables = { systemId, tripIds };
-      const response = await axios.post(
-        process.env.TRIP_GRAPHQL_URL,
-        { query, variables },
+      const url = `${BASE_URL}/asset-management/vehicle/${systemId}/usage?startDate=${startDate}&endDate=${endDate}`;
+      const response = await axios.get(url, {
+        headers: {
+          "accept": "*/*",
+          "x-requestor": "test",
+          "api-key": TRIP_EVENTS_SUMMARY_API_KEY,
+        },
+      });
+      return response.data;
+    } catch (error) {
+      return error.response?.data || { message: error.message };
+    }
+  },
+  createGeofence: async ({
+    name,
+    radius,
+    coordinates,
+    systemId,
+    notification,
+  }) => {
+    try {
+      const api1Payload = {
+        name: name,
+        geometryType: "circle",
+        radius: radius,
+        coordinates: coordinates,
+        isActive: true,
+        tolerance: 0,
+        type: "personal",
+        isPOI: true,
+        tag: "Office",
+      };
+
+      const api1Response = await axios.post(
+        `${BASE_URL}/location/locations`,
+        api1Payload,
         {
           headers: {
-            "Content-Type": "application/json",
-            "api-key": process.env.TRIP_GRAPHQL_API_KEY,
+            accept:
+              "application/com.c2c.telemetry.location.dto.v1.response.locationresponse.v1+json",
+            "api-key": GEOFENCE_API_KEY,
+            "x-requestor": "test",
+            "Content-Type":
+              "application/com.c2c.telemetry.location.dto.v1.request.locationrequestnew.v1+json",
+          },
+        }
+      );
+
+      const geoId = api1Response.data?.responseData?.geoId;
+
+      if (!geoId) {
+        throw new Error("Failed to retrieve geoId from API 1 response");
+      }
+
+      const api2Payload = {
+        mapping: [
+          {
+            schedule: {},
+            notification: notification,
+            isEdgeEnabled: 1,
+            ruleId: 0,
+            isActive: true,
+            ruleExpression: "string",
+            name: name,
+            systemId: systemId,
+          },
+        ],
+      };
+
+      const api2Response = await axios.post(
+        `${BASE_URL}/location/vehicles/geo-fences/${geoId}`,
+        api2Payload,
+        {
+          headers: {
+            accept:
+              "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
+            "api-key": GEOFENCE_API_KEY,
+            "x-requestor": "test",
+            "Content-Type":
+              "application/com.c2c.telemetry.location.dto.v1.request.addtelemetrylocationdetailsrequestnew.v1+json",
+          },
+        }
+      );
+
+      const api2Data = api2Response.data;
+      let geofenceStatus = null;
+      let vehicleMappingId = null;
+
+      if (
+        api2Response.status === 200 &&
+        api2Data?.geofenceMappings?.[0]?.message
+          ?.toLowerCase()
+          .includes("initiated")
+      ) {
+        vehicleMappingId = api2Data.geofenceMappings[0].vehicleMappingId;
+
+        if (vehicleMappingId) {
+          // Wait for a moment before checking the status
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // 2-second delay
+
+          const statusResponse = await axios.get(
+            `${BASE_URL}/location/vehicles/geo-fences?vehicleMappingId=${vehicleMappingId}`,
+            {
+              headers: {
+                accept: "application/json",
+                "api-key": GEOFENCE_API_KEY,
+                "x-requestor": "test",
+              },
+            }
+          );
+          geofenceStatus = statusResponse.data?.responseData?.geofenceStatus || "PENDING";
+        }
+      }
+
+      const api2GeofenceMappings = api2Data?.geofenceMappings?.map(
+        (mapping) => ({
+          systemId: mapping.systemId,
+          vehicleMappingId: mapping.vehicleMappingId,
+          message: mapping.message,
+        })
+      );
+
+      return {
+        message: "Geofence creation process completed.",
+        geoId: geoId,
+        vehicleMappingId: vehicleMappingId,
+        geofenceStatus: geofenceStatus,
+        details: api2Data.geofenceMappings,
+      };
+    } catch (error) {
+      return error.response?.data || { message: error.message };
+    }
+  },
+  getGeoFences: async ({ systemId }) => {
+    try {
+      const response = await axios.get(
+        `${BASE_URL}/location/vehicles/${systemId}/geo-fences?isActive=true`,
+        {
+          headers: {
+            accept:
+              "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
+            "api-key": GEOFENCE_API_KEY,
             "x-requestor": "test",
           },
-        },
+        }
       );
-      return response.data?.data?.mergeTrips || null;
+      return response.data;
+    } catch (error) {
+      return error.response?.data || { message: error.message };
+    }
+  },
+  updateGeofence: async ({
+    geoId,
+    name,
+    radius,
+    coordinates,
+    systemId,
+    notification,
+  }) => {
+    try {
+      // API 1 update
+      const api1Payload = {
+        name,
+        geometryType: "circle",
+        radius,
+        coordinates,
+        isActive: true,
+        tolerance: 0,
+        type: "personal",
+        isPOI: true,
+        tag: "Office",
+      };
+      const api1Response = await axios.put(`${BASE_URL}/location/locations/${geoId}`, api1Payload, {
+        headers: {
+          accept:
+            "application/com.c2c.telemetry.location.dto.v1.response.locationresponse.v1+json",
+          "api-key": GEOFENCE_API_KEY,
+          "x-requestor": "test",
+          "Content-Type":
+            "application/com.c2c.telemetry.location.dto.v1.request.locationrequestnew.v1+json",
+        },
+      });
+
+      // Wait for 2 seconds after successful API 1 response
+      if (api1Response.status === 200) {
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // 2-second delay
+      }
+
+      // API 2 notification update
+      const api2Payload = 
+          {
+            schedule: {},
+            notification,
+            isEdgeEnabled: 1,
+            ruleId: 0,
+            isActive: true,
+            ruleExpression: "string",
+          };
+      const api2Response = await axios.put(
+        `${BASE_URL}/location/vehicles/${systemId}/geo-fences/${geoId}`,
+        api2Payload,
+        {
+          headers: {
+            accept:
+              "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
+            "api-key": GEOFENCE_API_KEY,
+            "x-requestor": "test",
+            "Content-Type":
+              "application/com.c2c.telemetry.location.dto.v1.request.telemetrylocationdetailsrequestnew.v1+json",
+          },
+        }
+      );
+      return api2Response.data;
+    } catch (error) {
+      return error.response?.data || { message: error.message };
+    }
+  },
+  deleteGeofence: async ({ geoId }) => {
+    try {
+      const api1Response = await axios.delete(
+        `${BASE_URL}/location/locations/${geoId}?isPOI=true`,
+        {
+          headers: {
+            accept:
+              "application/com.c2c.telemetry.location.dto.v1.response.locationresponsedata.v1+json",
+            "api-key": GEOFENCE_API_KEY,
+            "x-requestor": "test",
+          },
+        }
+      );
+      return api1Response.data;
+    } catch (error) {
+      return error.response?.data || { message: error.message };
+    }
+  },
+  enabledisableGeofence: async ({ systemId, geoId, action }) => {
+    try {
+      const lowerCaseAction = String(action || "").toLowerCase();
+      if (!["enable", "disable"].includes(lowerCaseAction)) {
+        throw new Error("Action must be either 'enable' or 'disable'.");
+      }
+      const response = await axios.put(
+        `${BASE_URL}/location/vehicles/${systemId}/geo-fences/${geoId}?action=${lowerCaseAction}`,
+        {},
+        {
+          headers: {
+            accept:
+              "application/com.c2c.telemetry.location.dto.v1.response.vehiclelocationresponse.v1+json",
+            "api-key": GEOFENCE_API_KEY,
+            "x-requestor": "test",
+            "Content-Type":
+              "application/com.c2c.telemetry.location.dto.v1.request.telemetrylocationdetailsrequestnew.v1+json",
+          },
+        }
+      );
+      return response.data;
     } catch (error) {
       return error.response?.data || { message: error.message };
     }
