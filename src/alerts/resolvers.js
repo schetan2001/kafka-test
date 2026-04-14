@@ -1,7 +1,7 @@
 const diagnosticPool = require('../db');
 const notificationPool = require('../notificationDb');
 
-const ALLOWED_CATEGORIES = [14, 11, 107, 3, 31, 22, 33, 29, 1, 21, 32, 62, 63, 90, 91, 99, 92, 93, 100, 94, 95, 117, 26];
+const ALLOWED_CATEGORIES = [14, 11, 107, 3, 31, 22, 33, 29, 1, 21, 32, 62, 63, 90, 91, 99, 92, 93, 100, 94, 95, 117, 26, 51, 47, 48];
 
 const alertsResolvers = {
     getAlerts: async ({ system_id, severity, limit, offset }) => {
