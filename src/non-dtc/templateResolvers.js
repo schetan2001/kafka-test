@@ -14,14 +14,14 @@ const nonDtcTemplateResolvers = {
         }
 
         const countResult = await pool.query(
-            `SELECT COUNT(*) as total FROM c2c_notification_db.public.ff_app_template ${whereClause}`,
+            `SELECT COUNT(*) as total FROM c2c_notification_db.public.t_app_template ${whereClause}`,
             params
         );
 
         const actualOffset = offset > 0 ? (offset - 1) * limit : 0;
 
         const dataResult = await pool.query(
-            `SELECT * FROM c2c_notification_db.public.ff_app_template ${whereClause} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+            `SELECT * FROM c2c_notification_db.public.t_app_template ${whereClause} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
             [...params, limit, actualOffset]
         );
 
@@ -32,7 +32,7 @@ const nonDtcTemplateResolvers = {
     },
 
     getAppTemplateById: async ({ template_id }) => {
-        const { rows } = await pool.query('SELECT * FROM c2c_notification_db.public.ff_app_template WHERE template_id = $1', [template_id]);
+        const { rows } = await pool.query('SELECT * FROM c2c_notification_db.public.t_app_template WHERE template_id = $1', [template_id]);
         return rows[0] || null;
     },
 
@@ -40,7 +40,7 @@ const nonDtcTemplateResolvers = {
         const { template_id, severity, template_desc, alert_msg } = input;
         try {
             const { rows } = await pool.query(
-                `INSERT INTO c2c_notification_db.public.ff_app_template (template_id, severity, template_desc, alert_msg, created_at)
+                `INSERT INTO c2c_notification_db.public.t_app_template (template_id, severity, template_desc, alert_msg, created_at)
                  VALUES ($1, $2, $3, $4, NOW())
                  RETURNING *`,
                 [template_id, severity, template_desc, alert_msg]
@@ -81,7 +81,7 @@ const nonDtcTemplateResolvers = {
         values.push(template_id);
 
         const { rows } = await pool.query(
-            `UPDATE c2c_notification_db.public.ff_app_template 
+            `UPDATE c2c_notification_db.public.t_app_template 
              SET ${fields.join(', ')} 
              WHERE template_id = $${idx} 
              RETURNING *`,
@@ -97,7 +97,7 @@ const nonDtcTemplateResolvers = {
 
     deleteAppTemplate: async ({ template_id }) => {
         const { rowCount } = await pool.query(
-            'DELETE FROM c2c_notification_db.public.ff_app_template WHERE template_id = $1',
+            'DELETE FROM c2c_notification_db.public.t_app_template WHERE template_id = $1',
             [template_id]
         );
         return rowCount > 0;

@@ -30,7 +30,7 @@ const nonDtcResolvers = {
                     t.template_desc,
                     t.alert_msg
                 FROM c2c_notification_db.public.t_notification_event e
-                LEFT JOIN c2c_notification_db.public.ff_app_template t ON t.template_id = 
+                LEFT JOIN c2c_notification_db.public.t_app_template t ON t.template_id = 
                     CASE 
                         WHEN e.category_id = 26 AND (e.message_info->>'event_code') = '0' THEN '26.1'
                         WHEN e.category_id = 26 AND (e.message_info->>'event_code') = '6' THEN '26.2'
