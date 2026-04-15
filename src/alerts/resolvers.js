@@ -33,7 +33,8 @@ const alertsResolvers = {
                     o.ecu_type,
                     t.template_id,
                     t.template_desc,
-                    t.alert_msg
+                    t.alert_msg,
+                    t.screen_id
                 FROM dtc_occurrences o
                 LEFT JOIN templates t ON o.severity = t.severity
                 ${dtcWhereClause}
@@ -61,7 +62,8 @@ const alertsResolvers = {
                 alert_template: row.template_id ? {
                     template_id: row.template_id,
                     template_desc: row.template_desc,
-                    alert_msg: row.alert_msg
+                    alert_msg: row.alert_msg,
+                    screen_id: row.screen_id
                 } : null
             }));
 
@@ -86,7 +88,8 @@ const alertsResolvers = {
                     t.template_id,
                     t.severity,
                     t.template_desc,
-                    t.alert_msg
+                    t.alert_msg,
+                    t.screen_id
                 FROM c2c_notification_db.public.t_notification_event e
                 LEFT JOIN c2c_notification_db.public.t_app_template t ON t.template_id = 
                     CASE 
@@ -123,7 +126,8 @@ const alertsResolvers = {
                 alert_template: {
                     template_id: event.template_id,
                     template_desc: event.template_desc,
-                    alert_msg: event.alert_msg
+                    alert_msg: event.alert_msg,
+                    screen_id: event.screen_id
                 }
             }));
 

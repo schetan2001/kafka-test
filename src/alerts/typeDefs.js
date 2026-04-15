@@ -5,6 +5,7 @@ const alertsSchema = buildSchema(`
     template_id: String
     template_desc: String
     alert_msg: String
+    screen_id: Float
   }
 
   type DtcAlert {
