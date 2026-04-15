@@ -8,7 +8,7 @@ const templateResolvers = {
         let idx = 1;
 
         if (search) {
-            whereClause = `WHERE template_id ILIKE $${idx} OR severity ILIKE $${idx} OR template_desc ILIKE $${idx} OR alert_msg ILIKE $${idx}`;
+            whereClause = `WHERE template_id ILIKE $${idx} OR severity ILIKE $${idx} OR template_desc ILIKE $${idx} OR alert_msg ILIKE $${idx} OR CAST(screen_id AS TEXT) ILIKE $${idx}`;
             params.push(`%${search}%`);
             idx++;
         }
@@ -37,13 +37,13 @@ const templateResolvers = {
     },
 
     createTemplate: async ({ input }) => {
-        const { template_id, severity, template_desc, alert_msg } = input;
+        const { template_id, severity, template_desc, alert_msg, screen_id } = input;
         try {
             const { rows } = await pool.query(
-                `INSERT INTO templates (template_id, severity, template_desc, alert_msg, created_at)
-                 VALUES ($1, $2, $3, $4, NOW())
+                `INSERT INTO templates (template_id, severity, template_desc, alert_msg, screen_id, created_at)
+                 VALUES ($1, $2, $3, $4, $5, NOW())
                  RETURNING *`,
-                [template_id, severity, template_desc, alert_msg]
+                [template_id, severity, template_desc, alert_msg, screen_id]
             );
             return rows[0];
         } catch (error) {
@@ -53,7 +53,7 @@ const templateResolvers = {
     },
 
     updateTemplate: async ({ template_id, input }) => {
-        const { severity, template_desc, alert_msg } = input;
+        const { severity, template_desc, alert_msg, screen_id } = input;
         
         const fields = [];
         const values = [];
@@ -71,7 +71,10 @@ const templateResolvers = {
             fields.push(`alert_msg = $${idx++}`);
             values.push(alert_msg);
         }
-
+        if (screen_id !== undefined) {
+            fields.push(`screen_id = $${idx++}`);
+            values.push(screen_id);
+        }
         if (fields.length === 0) {
             throw new Error('No fields to update');
         }

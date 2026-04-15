@@ -8,6 +8,7 @@ const templateSchema = buildSchema(`
     alert_msg: String
     created_at: String
     updated_at: String
+    screen_id: Float
   }
 
   input TemplateInput {
@@ -15,12 +16,14 @@ const templateSchema = buildSchema(`
     severity: String!
     template_desc: String
     alert_msg: String
+    screen_id: Float
   }
 
   input UpdateTemplateInput {
     severity: String
     template_desc: String
     alert_msg: String
+    screen_id: Float
   }
 
   type TemplateResult {

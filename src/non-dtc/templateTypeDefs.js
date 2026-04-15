@@ -8,6 +8,7 @@ const nonDtcTemplateSchema = buildSchema(`
     alert_msg: String
     created_at: String
     updated_at: String
+    screen_id: Float
   }
 
   input AppTemplateInput {
@@ -15,12 +16,14 @@ const nonDtcTemplateSchema = buildSchema(`
     severity: String!
     template_desc: String
     alert_msg: String
+    screen_id: Float
   }
 
   input UpdateAppTemplateInput {
     severity: String
     template_desc: String
     alert_msg: String
+    screen_id: Float
   }
 
   type AppTemplateResult {

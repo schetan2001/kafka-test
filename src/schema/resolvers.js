@@ -4,7 +4,7 @@ const resolvers = {
 
 
     // ── Filtered list with pagination ──────────────────────────────
-    dtcOccurrences: async ({ ecu_type, status, severity, dtc_code, system_id, system_ids, limit = 50, offset = 0 }) => {
+    dtcOccurrences: async ({ ecu_type, status, severity, dtc_code, system_id, system_ids, from_date, end_date, limit = 50, offset = 0 }) => {
         const fetchForSystem = async (sid) => {
             const conditions = [];
             const params = [];
@@ -30,7 +30,14 @@ const resolvers = {
                 conditions.push(`system_id = $${idx++}`);
                 params.push(sid);
             }
-
+            if (from_date) {
+                conditions.push(`created_at >= $${idx++}`);
+                params.push(new Date(from_date.length === 10 ? Number(from_date) * 1000 : Number(from_date)).toISOString());
+            }
+            if (end_date) {
+                conditions.push(`created_at <= $${idx++}`);
+                params.push(new Date(end_date.length === 10 ? Number(end_date) * 1000 : Number(end_date)).toISOString());
+            }
             const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
             // Get total count
@@ -53,7 +60,7 @@ const resolvers = {
                  FROM dtc_occurrences o
                  LEFT JOIN templates t ON o.severity = t.severity
                  LEFT JOIN dtc_master m ON o.dtc_id = m.id
-                 ${whereClause.replace(/(\w+)\s*=/g, 'o.$1 =')} 
+                 ${whereClause.replace(/(\w+)\s*(=|>=|<=)/g, 'o.$1 $2')}  
                  ORDER BY o.created_at DESC 
                  LIMIT $${idx++} OFFSET $${idx++}`,
                 [...params, limit, actualOffset]

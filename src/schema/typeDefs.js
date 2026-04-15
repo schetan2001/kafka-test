@@ -78,6 +78,8 @@ const schema = buildSchema(`
       dtc_code: String
       system_id: String
       system_ids: [String]
+      from_date: String
+      end_date: String
       limit: Int
       offset: Int
     ): DtcOccurrenceResult!
