@@ -1,0 +1,17 @@
+{
+  "name": "device-management-api",
+  "version": "1.0.0",
+  "description": "GraphQL API for device management operations - update and delete by IMEI",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "express-graphql": "^0.12.0",
+    "graphql": "^15.8.0",
+    "pg": "^8.18.0",
+    "dotenv": "^16.0.3",
+    "cors": "^2.8.5"
+  }
+}
