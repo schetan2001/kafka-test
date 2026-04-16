@@ -4,10 +4,8 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install --production
+RUN npm install
 
 COPY . .
-
-EXPOSE 4020
 
 CMD ["node", "index.js"]

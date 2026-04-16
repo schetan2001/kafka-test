@@ -11,7 +11,6 @@ app.use(cors());
 
 const PORT = process.env.PORT;
 
-// PostgreSQL connection pool for efficient querying
 const pool = new Pool({
   host: process.env.PG_HOST,
   port: process.env.PG_PORT,
