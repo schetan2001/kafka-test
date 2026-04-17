@@ -360,7 +360,7 @@ const root = {
         const updatedTime = event3101Signal ? event3101Signal.updatedTime : null;
 
         telemetryData = {
-          ignitionStatus: extractSignalValue(signals, "VCU_Data__Ignition_Sts_RX_V", 6500),
+          ignitionStatus: extractSignalValue(signals, "VCU_Data__Veh_Authentication_Flag_RX_V", 6500),
           hillHold: extractSignalValue(signals, "Display_info__Hill_Hold_TTL_RX_V", 6500),
           cruiseControlStatus: extractSignalValue(signals, "Display_info__Cruise_Control_TTL_RX_V", 6500),
           tractionControl: extractSignalValue(signals, "Custom_Mode__Traction_Control_TX_V", 6500),
