@@ -104,14 +104,38 @@ async function getVinForSystemId(systemId) {
   }
 }
 
+async function getVehicleStatuses(systemId) {
+  try {
+    const url = `${LOCATION_API_URL}${systemId}`;
+    const resp = await axios.get(url, { headers: LOCATION_API_HEADERS });
+    const signals = resp.data?.responseData?.signals || [];
+    
+    // Extract values based on signal names
+    const odometer = signals.find((s) => s.name === "VCU_Data5__Odometer_RX_V")?.value;
+    const batterySoc = signals.find((s) => s.name === "Batt_Sts_Info__Display_SoC_RX_V")?.value;
+    const batteryTempMin = signals.find((s) => s.name === "Batt_Temp__Batt_Temp_Min_RX_V")?.value;
+    const batteryTempMax = signals.find((s) => s.name === "Batt_Temp__Batt_Temp_Max_RX_V")?.value;
+    
+    return {
+      odometer,
+      batterySoc,
+      batteryTempMin,
+      batteryTempMax
+    };
+  } catch (err) {
+    console.error("Error fetching vehicle statuses:", err.message);
+    return {};
+  }
+}
+
 // --- Configuration ---
 const KAFKA_BROKER = process.env.KAFKA_BROKER || "localhost:9092";
 const KAFKA_TOPIC = process.env.KAFKA_TOPIC;
 const SERVER_PORT = process.env.SERVER_PORT || 4000;
-const TICKET_API_URL =
+const TICKET_API_URL = process.env.TICKET_API_URL ||
   "https://sdpondemand.manageengine.in/app/sandbox_60023490885_100725_iax/api/v3/requests";
 
-const TOKEN_API_URL =
+const TOKEN_API_URL = process.env.TOKEN_API_URL ||
   "https://accounts.zoho.in/oauth/v2/token?refresh_token=1000.de9f6a55b1bc15f3a7054cae27cbe897.efd51e07c78d8875ec84797452d45a26&grant_type=refresh_token&client_id=1000.JARQGYYRTK7II3HNYA24RJRTA3JYUU&client_secret=84fdafbd326346583d03075e0047368b594f8240da&redirect_uri=https%3A%2F%2Fsdpondemand.manageengine.in%2Fhome%2F&scope=SDPOnDemand.requests.CREATE,SDPOnDemand.requests.UPDATE";
 
 const TOKEN_HEADERS = {
@@ -183,7 +207,7 @@ async function handleKafkaMessage(payload) {
       case 'HIGH': return 'A';
       case 'MEDIUM': return 'B';
       case 'LOW': return 'C';
-      default: return 'K'; // Default category if severity is unknown
+      default: return 'K';
     }
   };
   const category = getCategoryFromSeverity(severity);
@@ -244,6 +268,10 @@ async function handleKafkaMessage(payload) {
           resolution: {
             content: `Fault cleared for DTC ID ${dtcId} at ${timestampIST} IST. Auto-closed.`,
           },
+          udf_fields: {
+            date_dtc_closed_timestamp: clearedAt,
+            udf_char317: "Auto Resolved by system"
+          },
         },
       };
       const form = new URLSearchParams();
@@ -255,7 +283,6 @@ async function handleKafkaMessage(payload) {
         );
         activeTicketsCache.delete(ticketKey);
 
-        // Update PostgreSQL
         try {
           const updateQuery = `
             UPDATE ff_dtc_tickets 
@@ -290,12 +317,16 @@ async function handleKafkaMessage(payload) {
         hour12: false,
       });
 
+      // Fetch vehicle statuses
+      const vehicleStatuses = await getVehicleStatuses(systemId);
+      const { odometer, batterySoc, batteryTempMin, batteryTempMax } = vehicleStatuses;
+
       const subject = `Flying Flea- DTC: ${dtcCode} | Category: ${category} | ${vin}`;
 
       const description =
         `Fault detected for <b>${vin}</b> at ${timestampIST} IST<br>` +
         `<b>VIN:</b> ${vin}<br>` +
-        `<b>DTC Code:</b> ${dtcCode} - ${dtcDescription}<br>` +
+        `<b>DTC Description:</b> ${dtcCode} - ${dtcDescription}<br>` +
         `<b>Severity:</b> ${severity}<br><br>` +
         `<b>Location Address:</b> ${locationAddress}<br><br>` +
         `<a href="${portalLink}">View in Vehicle Support Portal</a>`;
@@ -307,9 +338,17 @@ async function handleKafkaMessage(payload) {
           description,
           requester: { email_id: "itsmadmin@royalenfield.com" },
           udf_fields: {
-            udf_char365: "4Y1S665848Z411439",
+            udf_char365: vin,
             udf_char371: "K",
             udf_char372: dtcCode,
+            udf_char370: locationAddress,
+            udf_char374: dtcDescription,
+            udf_char383: category,
+            date_dtc_initiated_time_stamp: eventTime,
+            udf_char366: odometer || null,
+            txt_battery_soc: batterySoc || null,
+            txt_battery_temp_min: batteryTempMin || null,
+            txt_battery_temperature_max: batteryTempMax || null,
           },
           template: { name: "FF GRID" },
         },
