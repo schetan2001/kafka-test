@@ -401,7 +401,7 @@ async function handleKafkaMessage(payload) {
       } catch (e) {
         console.error(
           `Failed to create ticket for ${displayId}, dtcId=${dtcId}:`,
-          e.response?.data || e.message,
+          JSON.stringify(e.response?.data || e.message, null, 2),
         );
       }
     }
