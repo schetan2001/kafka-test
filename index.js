@@ -269,7 +269,7 @@ async function handleKafkaMessage(payload) {
             content: `Fault cleared for DTC ID ${dtcId} at ${timestampIST} IST. Auto-closed.`,
           },
           udf_fields: {
-            date_dtc_closed_timestamp: clearedAt ? String(clearedAt) : null,
+            date_dtc_closed_timestamp: clearedAt,
             udf_char317: "Auto Resolved by system"
           },
         },
@@ -344,7 +344,7 @@ async function handleKafkaMessage(payload) {
             udf_char370: locationAddress,
             udf_char374: dtcDescription,
             udf_char383: category,
-            date_dtc_initiated_time_stamp: eventTime ? String(eventTime) : null,
+            date_dtc_initiated_time_stamp: eventTime,
             udf_char366: odometer || null,
             txt_battery_soc: batterySoc || null,
             txt_battery_temp_min: batteryTempMin || null,
