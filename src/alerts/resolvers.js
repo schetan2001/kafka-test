@@ -4,7 +4,7 @@ const notificationPool = require('../notificationDb');
 const ALLOWED_CATEGORIES = [14, 11, 107, 3, 31, 22, 33, 29, 1, 21, 32, 62, 63, 90, 91, 99, 92, 93, 100, 94, 95, 117, 26, 51, 47, 48];
 
 const alertsResolvers = {
-    getAlerts: async ({ system_id, severity, category_id, limit, offset }) => {
+    getAlerts: async ({ system_id, severity, category_ids, limit, offset }) => {
         try {
             // 1. Fetch DTC Alerts
             const dtcConditions = [];
@@ -68,7 +68,7 @@ const alertsResolvers = {
             }));
 
             // 2. Fetch Non-DTC Alerts
-            const categoriesToFilter = category_id ? [category_id] : ALLOWED_CATEGORIES;
+            const categoriesToFilter = (category_ids && category_ids.length > 0) ? category_ids : ALLOWED_CATEGORIES;
             const nonDtcConditions = [`e.category_id = ANY($1::int[])`];
             const nonDtcParams = [categoriesToFilter];
             let nonDtcIdx = 2;
