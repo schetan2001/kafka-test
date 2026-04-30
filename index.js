@@ -134,8 +134,16 @@ const schema = buildSchema(`
     deletedDevice: Device
   }
 
+  type DevicesResponse {
+    devices: [Device!]!
+    total: Int!
+    offset: Int!
+    limit: Int!
+  }
+
   type Query {
     getDevice(imei: String!): Device
+    getDevices(offset: Int, limit: Int): DevicesResponse
   }
 
   type Mutation {
@@ -161,6 +169,44 @@ const root = {
       }
 
       return result.rows[0];
+    } catch (error) {
+      throw new Error(error.message);
+    }
+  },
+
+  // Get devices with pagination
+  getDevices: async ({ offset = 1, limit = 10 }) => {
+    try {
+      if (offset < 1) {
+        throw new Error("Offset must be a positive integer.");
+      }
+
+      if (limit < 1 || limit > 100) {
+        throw new Error("Limit must be between 1 and 100.");
+      }
+
+      // Calculate row offset based on page number
+      const rowOffset = (offset - 1) * limit;
+
+      // Get total count
+      const countQuery = `SELECT COUNT(*) FROM ${TABLE_NAME}`;
+      const countResult = await pool.query(countQuery);
+      const total = parseInt(countResult.rows[0].count, 10);
+
+      // Get paginated devices
+      const dataQuery = `
+        SELECT * FROM ${TABLE_NAME}
+        ORDER BY created_time DESC
+        LIMIT $1 OFFSET $2
+      `;
+      const dataResult = await pool.query(dataQuery, [limit, rowOffset]);
+
+      return {
+        devices: dataResult.rows,
+        total,
+        offset,
+        limit,
+      };
     } catch (error) {
       throw new Error(error.message);
     }
