@@ -33,7 +33,7 @@ const alertsSchema = buildSchema(`
   }
 
   type Query {
-    getAlerts(system_id: String, severity: String, limit: Int, offset: Int): AlertsResponse!
+    getAlerts(system_id: String, severity: String, category_id: Int, limit: Int, offset: Int): AlertsResponse!
   }
 `);
 
