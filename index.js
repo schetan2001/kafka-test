@@ -284,7 +284,8 @@ const getVehicleStatus = (signals) => {
 
   // First check if vehicle is riding
   if (modeLvl1 === "4") return "Riding";
-
+// Check if vehicle is charging
+if (modeLvl1 === "5") return "Charging";
   // If not riding, check lock status
   const modeLvl3 = extractSignalValue(
     signals,
