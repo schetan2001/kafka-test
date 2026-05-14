@@ -5,6 +5,7 @@ const axios = require("axios");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const { Pool } = require("pg");
+const Redis = require("ioredis");
 
 dotenv.config();
 
@@ -28,6 +29,44 @@ pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
   process.exit(-1);
 });
+
+// --- Redis Connection ---
+const redis = new Redis({
+  host: process.env.REDIS_HOST || "10.60.241.34",
+  port: parseInt(process.env.REDIS_PORT) || 6379,
+  password: process.env.REDIS_AUTH_KEY,
+  tls: process.env.REDIS_TLS === "true" ? {} : undefined,
+  retryStrategy(times) {
+    const delay = Math.min(times * 200, 5000);
+    return delay;
+  },
+});
+
+redis.on("connect", () => {
+  console.log("Connected to Redis!");
+});
+
+redis.on("error", (err) => {
+  console.error("Redis connection error:", err.message);
+});
+
+/**
+ * Fetch vehicle mode levels and tyre pressure from Redis.
+ * Key pattern: vehicle:modes:{systemId}
+ * Returns parsed JSON object or null if key not found.
+ */
+const getVehicleModesFromRedis = async (systemId) => {
+  try {
+    const data = await redis.get(`vehicle:modes:${systemId}`);
+    if (data) {
+      return JSON.parse(data);
+    }
+    return null;
+  } catch (err) {
+    console.error("Error fetching vehicle modes from Redis:", err.message);
+    return null;
+  }
+};
 
 const app = express();
 app.use(express.json());
@@ -257,17 +296,18 @@ const getSignalStrength = (signals) => {
   return levels[finalIndex];
 };
 
-const getChargingStatus = (signals) => {
-  const modeLvl1 = extractSignalValue(
-    signals,
-    "Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V", 6500
-  );
+const getChargingStatus = (signals, redisData = null) => {
+  // Prefer Redis values for vehicle mode levels
+  const lvl1FromRedis = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V != null;
+  const modeLvl1 = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V
+    ?? extractSignalValue(signals, "Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V", 6500);
+  console.log(`[chargingStatus] Vehicle_Mode_Lvl_1: source=${lvl1FromRedis ? "REDIS" : "API"}, value=${modeLvl1}`);
 
   if (modeLvl1 === "5") {
-    const modeLvl2 = extractSignalValue(
-      signals,
-      "Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V", 6500
-    );
+    const lvl2FromRedis = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V != null;
+    const modeLvl2 = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V
+      ?? extractSignalValue(signals, "Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V", 6500);
+    console.log(`[chargingStatus] Vehicle_Mode_Lvl_2: source=${lvl2FromRedis ? "REDIS" : "API"}, value=${modeLvl2}`);
 
     if (modeLvl2 === "15") return "Fast Charging";
     if (modeLvl2 === "16") return "Slow Charging";
@@ -276,29 +316,32 @@ const getChargingStatus = (signals) => {
   return "Not Charging";
 };
 
-const getVehicleStatus = (signals) => {
-  const modeLvl1 = extractSignalValue(
-    signals,
-    "Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V", 6500
-  );
+const getVehicleStatus = (signals, redisData = null) => {
+  // Prefer Redis values for vehicle mode levels
+  const lvl1FromRedis = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V != null;
+  const modeLvl1 = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V
+    ?? extractSignalValue(signals, "Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V", 6500);
+  console.log(`[vehicleStatus] Vehicle_Mode_Lvl_1: source=${lvl1FromRedis ? "REDIS" : "API"}, value=${modeLvl1}`);
 
   // First check if vehicle is riding
   if (modeLvl1 === "4") return "Riding";
-// Check if vehicle is charging
-if (modeLvl1 === "5") return "Charging";
-  // If not riding, check lock status
-  const modeLvl3 = extractSignalValue(
-    signals,
-    "Vehicle_Mode__Vehicle_Mode_Lvl_3_RX_V", 6500
-  );
+
+  // Check if vehicle is charging
+  if (modeLvl1 === "5") return "Charging";
+
+  // If not riding or charging, check lock status
+  const lvl3FromRedis = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_3_RX_V != null;
+  const modeLvl3 = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_3_RX_V
+    ?? extractSignalValue(signals, "Vehicle_Mode__Vehicle_Mode_Lvl_3_RX_V", 6500);
+  console.log(`[vehicleStatus] Vehicle_Mode_Lvl_3: source=${lvl3FromRedis ? "REDIS" : "API"}, value=${modeLvl3}`);
 
   if (["1", "4", "6"].includes(modeLvl3)) return "Locked";
 
   // If not locked, check parking status
-  const modeLvl2 = extractSignalValue(
-    signals,
-    "Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V", 6500
-  );
+  const lvl2FromRedis = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V != null;
+  const modeLvl2 = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V
+    ?? extractSignalValue(signals, "Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V", 6500);
+  console.log(`[vehicleStatus] Vehicle_Mode_Lvl_2: source=${lvl2FromRedis ? "REDIS" : "API"}, value=${modeLvl2}`);
   if (modeLvl2 === "12") return "Parked";
 
   return "Unlocked";
@@ -308,8 +351,8 @@ if (modeLvl1 === "5") return "Charging";
 const root = {
   getVehicleStatuses: async ({ systemId }) => {
     try {
-      // Fetch both APIs in parallel
-      const [stateResponse, telemetryResponse] = await Promise.all([
+      // Fetch state API, telemetry API, and Redis vehicle modes in parallel
+      const [stateResponse, telemetryResponse, redisVehicleModes] = await Promise.all([
         axios.post(
           `${BASE_URL}/state-operation-service/state/vehicles`,
           [systemId],
@@ -330,8 +373,23 @@ const root = {
               "api-key": TELEMETRY_API_KEY,
             },
           }
-        )
+        ),
+        getVehicleModesFromRedis(systemId)
       ]);
+
+      // Log Redis data source status
+      if (redisVehicleModes) {
+        console.log(`[getVehicleStatuses] Redis data FOUND for systemId=${systemId}`, {
+          Vehicle_Mode_Lvl_1: redisVehicleModes.Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V,
+          Vehicle_Mode_Lvl_2: redisVehicleModes.Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V,
+          Vehicle_Mode_Lvl_3: redisVehicleModes.Vehicle_Mode__Vehicle_Mode_Lvl_3_RX_V,
+          Front_pressure_level: redisVehicleModes.Front_pressure_level,
+          Rear_pressure_level: redisVehicleModes.Rear_pressure_level,
+          lastUpdated: redisVehicleModes.lastUpdated,
+        });
+      } else {
+        console.log(`[getVehicleStatuses] Redis data NOT FOUND for systemId=${systemId}, falling back to telemetry API`);
+      }
 
       // Extract state data
       let stateData = {};
@@ -416,8 +474,8 @@ const root = {
           aggressiveRange: extractSignalValue(signals, "Range_Info__Agg_Range_RX_V", 6500),
           rangeGain: extractSignalValue(signals, "Range_Info__Range_Gain_RX_V"),
           batterySoc: extractSignalValue(signals, "Batt_Sts_Info__Display_SoC_RX_V", 6500),
-          chargingStatus: getChargingStatus(signals),
-          vehicleStatus: getVehicleStatus(signals),
+          chargingStatus: getChargingStatus(signals, redisVehicleModes),
+          vehicleStatus: getVehicleStatus(signals, redisVehicleModes),
           lockStatus: extractSignalValue(signals, "VCU_Data__Veh_Authentication_Flag_RX_V", 6500),
           timeToChargeHrs: extractSignalValue(signals, "Batt_Limits__Time_to_Chrg_Hrs_RX_V", 6500),
           timeToChargeMins: extractSignalValue(signals, "Batt_Limits__Time_to_Chrg_Mins_RX_V", 6500),
@@ -428,8 +486,20 @@ const root = {
           regenBrakeControl: extractSignalValue(signals, "Custom_Mode__Regen_Brake_Control_TX_V", 6500),
           batteryTempMin: extractSignalValue(signals, "Batt_Temp__Batt_Temp_Min_RX_V", 6500),
           batteryTempMax: extractSignalValue(signals, "Batt_Temp__Batt_Temp_Max_RX_V", 6500),
-          frontPressureLvl: extractSignalValue(signals, "Front_pressure_level", 6500),
-          rearPressureLvl: extractSignalValue(signals, "Rear_pressure_level", 6500),
+          frontPressureLvl: (() => {
+            const fromRedis = redisVehicleModes?.Front_pressure_level != null;
+            const val = redisVehicleModes?.Front_pressure_level
+              ?? extractSignalValue(signals, "Front_pressure_level", 6500);
+            console.log(`[getVehicleStatuses] frontPressureLvl: source=${fromRedis ? "REDIS" : "API"}, value=${val}`);
+            return val;
+          })(),
+          rearPressureLvl: (() => {
+            const fromRedis = redisVehicleModes?.Rear_pressure_level != null;
+            const val = redisVehicleModes?.Rear_pressure_level
+              ?? extractSignalValue(signals, "Rear_pressure_level", 6500);
+            console.log(`[getVehicleStatuses] rearPressureLvl: source=${fromRedis ? "REDIS" : "API"}, value=${val}`);
+            return val;
+          })(),
           frontTempLvl: extractSignalValue(signals, "Front_temperature_level", 6500),
           rearTempLvl: extractSignalValue(signals, "Rear_temperature_level", 6500),
           frontBatteryLvl: extractSignalValue(signals, "Front_battery_level", 6500),
