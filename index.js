@@ -9,9 +9,8 @@ const INPUT_TOPIC = process.env.INPUT_TOPIC;
 const PORT = Number(process.env.PORT || 3000);
 const AGGREGATION_WINDOW_MS = Number(process.env.AGGREGATION_WINDOW_MS || 1000);
 
-// Event type filters
 const FAULT_CODE_EVENT_TYPES = [6506];
-const DOL_PARAM_EVENT_TYPES = [6504, 6505];
+const DOL_PARAM_EVENT_TYPES = [6500, 6501];
 
 if (!KAFKA_BROKER || !INPUT_TOPIC) {
   throw new Error(
