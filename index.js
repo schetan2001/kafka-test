@@ -560,26 +560,26 @@ const root = {
   getCampaignVersions: async ({ systemId }) => {
     try {
       // Get current version
-      const currentVersionResponse = await axios.get(
-        `${BASE_URL}/ota/campaign-manager/vehicles/${systemId}`,
-        {
-          headers: {
-            accept: "*/*",
-            "api-key": CAMPAIGN_API_KEY,
-            "x-requestor": "admin",
-          },
-        }
-      );
+      // const currentVersionResponse = await axios.get(
+      //   `${BASE_URL}/ota/campaign-manager/vehicles/${systemId}`,
+      //   {
+      //     headers: {
+      //       accept: "*/*",
+      //       "api-key": CAMPAIGN_API_KEY,
+      //       "x-requestor": "admin",
+      //     },
+      //   }
+      // );
 
-      let currentVersion = null;
-      if (currentVersionResponse.data?.vehicle?.ecus) {
-        const compositeEcu = currentVersionResponse.data.vehicle.ecus.find(
-          (ecu) => ecu.ecuName === "composite"
-        );
-        if (compositeEcu?.ecuChipsetInfos?.[0]) {
-          currentVersion = compositeEcu.ecuChipsetInfos[0].currentVersion;
-        }
-      }
+      let currentVersion = '1.0.2'; // Set static value as of now.
+      // if (currentVersionResponse.data?.vehicle?.ecus) {
+      //   const compositeEcu = currentVersionResponse.data.vehicle.ecus.find(
+      //     (ecu) => ecu.ecuName === "composite"
+      //   );
+      //   if (compositeEcu?.ecuChipsetInfos?.[0]) {
+      //     currentVersion = compositeEcu.ecuChipsetInfos[0].currentVersion;
+      //   }
+      // }
 
       let targetVersion = null;
       try {
