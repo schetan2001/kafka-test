@@ -6,6 +6,7 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const { Pool } = require("pg");
 const Redis = require("ioredis");
+const { requestLogger } = require("./logger/requestLogger");
 
 dotenv.config();
 
@@ -70,6 +71,8 @@ const getVehicleModesFromRedis = async (systemId) => {
 
 const app = express();
 app.use(express.json());
+// Must come BEFORE graphqlHTTP so ALS context exists for GraphQL
+app.use(requestLogger);
 
 const corsOptions = {
   origin: [
