@@ -264,7 +264,6 @@ async function handleKafkaMessage(payload) {
       );
       // Convert clearedAt to epoch milliseconds
       const clearedAtEpoch = clearedAt ? new Date(clearedAt).getTime() : Date.now();
-      console.log(`[CLOSE] date_dtc_closed_timestamp value: ${clearedAtEpoch} (raw clearedAt: ${clearedAt}, type: ${typeof clearedAt})`);
       
       const resolutionPayload = {
         request: {
@@ -273,7 +272,7 @@ async function handleKafkaMessage(payload) {
             content: `Fault cleared for DTC ID ${dtcId} at ${timestampIST} IST. Auto-closed.`,
           },
           udf_fields: {
-            date_dtc_closed_timestamp: clearedAtEpoch,
+            date_dtc_closed_timestamp: String(clearedAtEpoch),
             udf_char317: "Auto Resolved by system"
           },
         },
@@ -327,7 +326,6 @@ async function handleKafkaMessage(payload) {
 
       // Convert eventTime to epoch milliseconds
       const eventTimeEpoch = new Date(eventTime).getTime();
-      console.log(`[CREATE] date_dtc_initiated_time_stamp value: ${eventTimeEpoch} (raw eventTime: ${eventTime}, type: ${typeof eventTime}, isNaN: ${isNaN(eventTimeEpoch)})`);
 
       const subject = `Flying Flea- DTC: ${dtcCode} | Category: ${category} | ${vin}`;
 
@@ -352,7 +350,7 @@ async function handleKafkaMessage(payload) {
             udf_char370: locationAddress,
             udf_char374: dtcDescription,
             udf_char383: category,
-            date_dtc_initiated_time_stamp: eventTimeEpoch,
+            date_dtc_initiated_time_stamp: String(eventTimeEpoch),
             udf_char366: odometer || null,
             txt_battery_soc: batterySoc || null,
             txt_battery_temp_min: batteryTempMin || null,
