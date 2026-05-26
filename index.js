@@ -264,6 +264,7 @@ async function handleKafkaMessage(payload) {
       );
       // Convert clearedAt to epoch milliseconds
       const clearedAtEpoch = clearedAt ? new Date(clearedAt).getTime() : Date.now();
+      console.log(`[CLOSE] date_dtc_closed_timestamp value: ${clearedAtEpoch} (raw clearedAt: ${clearedAt}, type: ${typeof clearedAt})`);
       
       const resolutionPayload = {
         request: {
@@ -326,6 +327,7 @@ async function handleKafkaMessage(payload) {
 
       // Convert eventTime to epoch milliseconds
       const eventTimeEpoch = new Date(eventTime).getTime();
+      console.log(`[CREATE] date_dtc_initiated_time_stamp value: ${eventTimeEpoch} (raw eventTime: ${eventTime}, type: ${typeof eventTime}, isNaN: ${isNaN(eventTimeEpoch)})`);
 
       const subject = `Flying Flea- DTC: ${dtcCode} | Category: ${category} | ${vin}`;
 
