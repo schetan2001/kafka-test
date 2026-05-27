@@ -346,11 +346,10 @@ async function handleKafkaMessage(payload) {
           requester: { email_id: "itsmadmin@royalenfield.com" },
           udf_fields: {
             udf_char365: vin,
-            udf_char371: "K",
-            udf_char372: dtcCode,
+            udf_char371: category,
+            udf_char372: dtcCode, 
             udf_char370: locationAddress,
             udf_char374: dtcDescription,
-            udf_char383: category,
             date_dtc_initiated_time_stamp: { value: String(eventTimeEpoch) },
             udf_char366: odometer || null,
             txt_battery_soc: batterySoc || null,
