@@ -1,4 +1,4 @@
-const { buildSchema } = require('graphql');
+const { buildSchema } = require("graphql");
 
 const nonDtcSchema = buildSchema(`
   type AlertTemplate {
@@ -11,6 +11,10 @@ const nonDtcSchema = buildSchema(`
     category_id: Int!
     system_id: String
     updated_time: String
+    device_sent_time: String
+    cloud_received_time: String
+    created_time: String
+    cloud_sent_time: String
     severity: String
     alert_template: AlertTemplate
   }

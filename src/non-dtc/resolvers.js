@@ -21,10 +21,14 @@ const nonDtcResolvers = {
             }
 
             let sql = `
-                SELECT 
+                SELECT
                     e.category_id,
                     e.system_id,
-                    e.updated_time,
+                    e.device_received_time AS updated_time,
+                    e.device_sent_time,
+                    e.cloud_received_time,
+                    e.created_time,
+                    e.cloud_sent_time,
                     t.template_id,
                     t.severity,
                     t.template_desc,
@@ -63,6 +67,10 @@ const nonDtcResolvers = {
                 category_id: event.category_id,
                 system_id: event.system_id,
                 updated_time: event.updated_time ? String(event.updated_time) : null,
+		        device_sent_time: event.device_sent_time ? String(event.device_sent_time) : null,
+                cloud_received_time: event.cloud_received_time ? String(event.cloud_received_time) : null,
+                created_time: event.created_time ? String(event.created_time) : null,
+                cloud_sent_time: event.cloud_sent_time ? String(event.cloud_sent_time) : null,
                 severity: event.severity,
                 alert_template: {
                     template_id: event.template_id,
