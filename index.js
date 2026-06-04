@@ -269,7 +269,7 @@ const getSignalStrength = (signals) => {
   const rsrp = parseFloat(extractSignalValue(signals, "AL_RSRP", 3101));
   const rsrq = parseFloat(extractSignalValue(signals, "AL_RSRQ", 3101));
 
-  if (isNaN(rsrp) || isNaN(rsrq)) return null;
+  if (isNaN(rsrp) || isNaN(rsrq)) return "No Signal";
 
   const levels = ["Poor", "Fair", "Good", "Excellent"];
 
