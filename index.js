@@ -808,12 +808,12 @@ const root = {
         if (componentDtcs.length === 0) {
           return 'Good';
         }
-        if (componentDtcs.some(dtc => dtc.severity && dtc.severity.toUpperCase() === 'HIGH')) {
+        if (componentDtcs.some(dtc => dtc.severity?.toUpperCase() === 'CRITICAL')) {
           return 'Critical';
         }
         if (componentDtcs.some(dtc => {
-          const sev = dtc.severity ? dtc.severity.toUpperCase() : '';
-          return sev === 'MEDIUM' || sev === 'LOW';
+          const sev = dtc.severity?.toUpperCase();
+          return sev === 'HIGH' || sev === 'MEDIUM';
         })) {
           return 'Warning';
         }
