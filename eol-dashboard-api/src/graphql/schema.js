@@ -6,6 +6,9 @@ const schema = buildSchema(`
       systemIds: [String!]!
       limit: Int
       offset: Int
+      search: String
+      sortBy: String
+      sortOrder: String
     ): EolDashboardResponse
   }
 
@@ -46,16 +49,18 @@ const schema = buildSchema(`
     chargingStatus: String
     alertCount: Int
     alerts: [DtcAlert]
+    pinSyncStatus: String
   }
 
   type DtcAlert {
     id: ID
     dtcCode: String
-    dtcDescription: String
     severity: String
+    status: String
     ecuType: String
-    ticketStatus: String
-    createdTime: String
+    occurrenceCount: Int
+    firstTriggeredAt: String
+    lastTriggeredAt: String
   }
 `);
 

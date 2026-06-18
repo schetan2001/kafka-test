@@ -1,53 +1,65 @@
 const { telemetryPool } = require("../config/db");
-const { ELEMENT_IDS, LOW_TYRE_THRESHOLD } = require("../constants/elementIds");
+const { ELEMENT_IDS, EVENT_6500_ELEMENT_IDS, EVENT_3101_ELEMENT_IDS, TPMS_FRONT_THRESHOLD, TPMS_REAR_THRESHOLD } = require("../constants/elementIds");
 
-const getVehicleTelemetry = async (systemIds, elementIds) => {
+const SUMMARY_ELEMENT_IDS = [
+  ELEMENT_IDS.BATTERY_SOC,
+  ELEMENT_IDS.TPMS_FRONT,
+  ELEMENT_IDS.TPMS_REAR,
+  ELEMENT_IDS.MODE_LVL1,
+];
+
+const getVehicleTelemetry = async (systemIds) => {
   const { rows } = await telemetryPool.query(
     `SELECT system_id, element_id, value, updated_time
      FROM t_telemetry_curr_values
      WHERE system_id = ANY($1)
-       AND element_id = ANY($2)`,
-    [systemIds, elementIds]
+       AND (
+         (element_id = ANY($2) AND event_type = 6500)
+         OR
+         (element_id = ANY($3) AND event_type = 3101)
+       )`,
+    [systemIds, EVENT_6500_ELEMENT_IDS, EVENT_3101_ELEMENT_IDS]
   );
   return rows;
 };
 
-const getBelowSocCount = async (systemIds) => {
+const getSummaryCounts = async (systemIds) => {
   const { rows } = await telemetryPool.query(
-    `SELECT COUNT(DISTINCT system_id) AS count
+    `SELECT
+       COUNT(DISTINCT CASE
+         WHEN element_id = $2
+           AND value ~ '^-?[0-9]+(\\.[0-9]+)?$'
+           AND value::float < 30
+         THEN system_id END) AS below_soc_count,
+       COUNT(DISTINCT CASE
+         WHEN (
+           (element_id = $3 AND value ~ '^-?[0-9]+(\\.[0-9]+)?$' AND value::float < $4)
+           OR
+           (element_id = $5 AND value ~ '^-?[0-9]+(\\.[0-9]+)?$' AND value::float < $6)
+         ) THEN system_id END) AS low_tyre_count,
+       COUNT(DISTINCT CASE
+         WHEN element_id = $7 AND value = '5'
+         THEN system_id END) AS charging_count
      FROM t_telemetry_curr_values
      WHERE system_id = ANY($1)
-       AND element_id = $2
-       AND value ~ '^-?[0-9]+(\\.[0-9]+)?$'
-       AND value::float < 30`,
-    [systemIds, ELEMENT_IDS.BATTERY_SOC]
+       AND element_id = ANY($8)
+       AND event_type = 6500`,
+    [
+      systemIds,
+      ELEMENT_IDS.BATTERY_SOC,
+      ELEMENT_IDS.TPMS_FRONT,
+      TPMS_FRONT_THRESHOLD,
+      ELEMENT_IDS.TPMS_REAR,
+      TPMS_REAR_THRESHOLD,
+      ELEMENT_IDS.MODE_LVL1,
+      SUMMARY_ELEMENT_IDS,
+    ]
   );
-  return parseInt(rows[0].count);
+  return {
+    belowSocCount: parseInt(rows[0].below_soc_count),
+    lowTyreCount:  parseInt(rows[0].low_tyre_count),
+    chargingCount: parseInt(rows[0].charging_count),
+  };
 };
 
-const getLowTyreCount = async (systemIds) => {
-  const { rows } = await telemetryPool.query(
-    `SELECT COUNT(DISTINCT system_id) AS count
-     FROM t_telemetry_curr_values
-     WHERE system_id = ANY($1)
-       AND element_id = ANY($2)
-       AND value ~ '^-?[0-9]+(\\.[0-9]+)?$'
-       AND value::float < $3`,
-    [systemIds, [ELEMENT_IDS.TPMS_FRONT, ELEMENT_IDS.TPMS_REAR], LOW_TYRE_THRESHOLD]
-  );
-  return parseInt(rows[0].count);
-};
-
-const getChargingCount = async (systemIds) => {
-  const { rows } = await telemetryPool.query(
-    `SELECT COUNT(DISTINCT system_id) AS count
-     FROM t_telemetry_curr_values
-     WHERE system_id = ANY($1)
-       AND element_id = $2
-       AND value = '5'`,
-    [systemIds, ELEMENT_IDS.MODE_LVL1]
-  );
-  return parseInt(rows[0].count);
-};
-
-module.exports = { getVehicleTelemetry, getBelowSocCount, getLowTyreCount, getChargingCount };
+module.exports = { getVehicleTelemetry, getSummaryCounts };

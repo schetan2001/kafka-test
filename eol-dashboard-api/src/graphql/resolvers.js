@@ -2,8 +2,9 @@ const vehicleService    = require("../services/vehicleService");
 const telemetryService  = require("../services/telemetryService");
 const diagnosticService = require("../services/diagnosticService");
 const redisService      = require("../services/redisService");
+const pinService        = require("../services/pinService");
 const { getSignalStrength, getChargingStatus } = require("../utils/signalUtils");
-const { ELEMENT_IDS, ALL_ELEMENT_IDS, LOW_TYRE_THRESHOLD, PROVISIONED_STATUSES } = require("../constants/elementIds");
+const { ELEMENT_IDS, TPMS_FRONT_THRESHOLD, TPMS_REAR_THRESHOLD, PROVISIONED_STATUSES } = require("../constants/elementIds");
 
 // Build a nested map: systemId → elementId → { value, updatedTime }
 const buildTelemetryMap = (rows) => {
@@ -24,23 +25,24 @@ const buildAlertsMap = (rows) => {
   for (const row of rows) {
     if (!map[row.system_id]) map[row.system_id] = [];
     map[row.system_id].push({
-      id:             String(row.id),
-      dtcCode:        row.dtc_code,
-      dtcDescription: row.dtc_description,
-      severity:       row.severity,
-      ecuType:        row.ecu_type,
-      ticketStatus:   row.ticket_status,
-      createdTime:    row.created_time != null ? String(row.created_time) : null,
+      id:               String(row.id),
+      dtcCode:          row.dtc_code,
+      severity:         row.severity,
+      status:           row.status,
+      ecuType:          row.ecu_type,
+      occurrenceCount:  row.occurrence_count,
+      firstTriggeredAt: row.first_triggered_at ? String(row.first_triggered_at) : null,
+      lastTriggeredAt:  row.last_triggered_at  ? String(row.last_triggered_at)  : null,
     });
   }
   return map;
 };
 
-const transformVehicle = (vehicle, telemetryMap, alertsMap, redisData, now) => {
+const transformVehicle = (vehicle, telemetryMap, alertsMap, redisData, pinSyncStatus, now) => {
   const sid      = vehicle.system_id;
   const telemetry = telemetryMap[sid] || {};
 
-  const getValue = (elementId) => telemetry[elementId]?.value ?? null;
+  const getValue = (elementId) => telemetry[elementId]?.value ?? null; // Get event type based telemetry values.
 
   // Last tracked: max updated_time across all fetched rows for this vehicle
   const updatedTimes = Object.values(telemetry)
@@ -62,8 +64,8 @@ const transformVehicle = (vehicle, telemetryMap, alertsMap, redisData, now) => {
   const tpmsFront  = getValue(ELEMENT_IDS.TPMS_FRONT);
   const tpmsRear   = getValue(ELEMENT_IDS.TPMS_REAR);
   const lowTyrePsi =
-    (tpmsFront !== null && parseFloat(tpmsFront) < LOW_TYRE_THRESHOLD) ||
-    (tpmsRear  !== null && parseFloat(tpmsRear)  < LOW_TYRE_THRESHOLD);
+    (tpmsFront !== null && parseFloat(tpmsFront) < TPMS_FRONT_THRESHOLD) ||
+    (tpmsRear  !== null && parseFloat(tpmsRear)  < TPMS_REAR_THRESHOLD);
 
   // LTE signal
   const rsrp = parseFloat(getValue(ELEMENT_IDS.AL_RSRP));
@@ -78,57 +80,62 @@ const transformVehicle = (vehicle, telemetryMap, alertsMap, redisData, now) => {
   const alerts = alertsMap[sid] || [];
 
   return {
-    systemId:         sid,
-    model:            vehicle.model || null,
+    systemId:           sid,
+    model:              vehicle.model || null,
     provisioningStatus: PROVISIONED_STATUSES.includes(vehicle.lifecycle_state) ? "Completed" : "Pending",
     ageing,
     lastTracked,
-    batterySoc:       getValue(ELEMENT_IDS.BATTERY_SOC),
-    batteryTempMin:   getValue(ELEMENT_IDS.BATTERY_TEMP_MIN),
-    batteryTempMax:   getValue(ELEMENT_IDS.BATTERY_TEMP_MAX),
+    batterySoc:         getValue(ELEMENT_IDS.BATTERY_SOC),
+    batteryTempMin:     getValue(ELEMENT_IDS.BATTERY_TEMP_MIN),
+    batteryTempMax:     getValue(ELEMENT_IDS.BATTERY_TEMP_MAX),
     tpmsFront,
     tpmsRear,
     lowTyrePsi,
     lteSignalStrength,
     chargingStatus,
-    alertCount:       alerts.length,
+    alertCount:         alerts.length,
     alerts,
+    pinSyncStatus:      pinSyncStatus ?? "FAILED",
   };
 };
 
-const getEolDashboard = async ({ systemIds, limit = 10, offset = 0 }) => {
-  // offset is page number (0-indexed) → SQL OFFSET = page × pageSize
-  const sqlOffset = offset * limit;
+const getEolDashboard = async ({ systemIds, limit = 10, offset = 0, search, sortBy, sortOrder }) => {
+  const sqlOffset  = offset * limit;
+  const searchTerm = search?.trim() || null;
 
   // Round 1: paginated vehicle page + all summary counts in parallel
+  // Summary counts always use all systemIds (no search filter — fleet-wide metrics)
+  // Pagination total uses search filter when a term is provided
   const [
     pagedVehicles,
-    totalCount,
+    summaryTotal,
     ageingCount,
-    belowSocCount,
-    lowTyreCount,
-    chargingCount,
+    telemetrySummary,    // single query → { belowSocCount, lowTyreCount, chargingCount }
     alertVehicleCount,
+    filteredTotal,       // null when no search term
   ] = await Promise.all([
-    vehicleService.getPagedVehicles(systemIds, limit, sqlOffset),
+    vehicleService.getPagedVehicles(systemIds, limit, sqlOffset, searchTerm, sortBy, sortOrder),
     vehicleService.getTotalCount(systemIds),
     vehicleService.getAgeingCount(systemIds),
-    telemetryService.getBelowSocCount(systemIds),
-    telemetryService.getLowTyreCount(systemIds),
-    telemetryService.getChargingCount(systemIds),
+    telemetryService.getSummaryCounts(systemIds),
     diagnosticService.getAlertVehicleCount(systemIds),
+    searchTerm
+      ? vehicleService.getTotalCount(systemIds, searchTerm)
+      : Promise.resolve(null),
   ]);
 
+  const paginationTotal = searchTerm ? filteredTotal : summaryTotal;
+
   const summary = {
-    total:                 totalCount,
-    belowThirtyPercentSoc: belowSocCount,
-    lowTyrePsi:            lowTyreCount,
-    charging:              chargingCount,
+    total:                 summaryTotal,
+    belowThirtyPercentSoc: telemetrySummary.belowSocCount,
+    lowTyrePsi:            telemetrySummary.lowTyreCount,
+    charging:              telemetrySummary.chargingCount,
     alerts:                alertVehicleCount,
     ageingAboveTenDays:    ageingCount,
   };
 
-  const pagination = { total: totalCount, limit, offset };
+  const pagination = { total: paginationTotal, limit, offset };
 
   if (pagedVehicles.length === 0) {
     return { summary, pagination, vehicles: [] };
@@ -137,22 +144,20 @@ const getEolDashboard = async ({ systemIds, limit = 10, offset = 0 }) => {
   const pagedSystemIds = pagedVehicles.map((v) => v.system_id);
 
   // Round 2: telemetry + alerts + Redis for this page only — all parallel
-  const [telemetryRows, alertRows, ...redisResults] = await Promise.all([
-    telemetryService.getVehicleTelemetry(pagedSystemIds, ALL_ELEMENT_IDS),
+  // Single MGET replaces N individual Redis GET calls
+  const [telemetryRows, alertRows, redisMap, pinSyncMap] = await Promise.all([
+    telemetryService.getVehicleTelemetry(pagedSystemIds),
     diagnosticService.getActiveAlerts(pagedSystemIds),
-    ...pagedSystemIds.map((id) => redisService.getVehicleModes(id)),
+    redisService.getVehicleModesMulti(pagedSystemIds),
+    pinService.getPinSyncStatuses(pagedSystemIds),
   ]);
 
   const telemetryMap = buildTelemetryMap(telemetryRows);
   const alertsMap    = buildAlertsMap(alertRows);
-
-  const redisMap = {};
-  pagedSystemIds.forEach((id, i) => { redisMap[id] = redisResults[i]; });
-
-  const now = Date.now();
+  const now          = Date.now();
 
   const vehicles = pagedVehicles.map((vehicle) =>
-    transformVehicle(vehicle, telemetryMap, alertsMap, redisMap[vehicle.system_id], now)
+    transformVehicle(vehicle, telemetryMap, alertsMap, redisMap[vehicle.system_id], pinSyncMap[vehicle.system_id], now)
   );
 
   return { summary, pagination, vehicles };
