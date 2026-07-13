@@ -52,7 +52,7 @@ redis.on("error", (err) => {
 });
 
 /**
- * Fetch vehicle mode levels and tyre pressure from Redis.
+ * Fetch vehicle mode levels, tyre pressure, odometer, range and battery SoC from Redis.
  * Key pattern: vehicle:modes:{systemId}
  * Returns parsed JSON object or null if key not found.
  */
@@ -433,7 +433,13 @@ const root = {
           trip1Odo: extractSignalValue(signals, "VCU_Data6__Trip1_Odo_RX_V", 6500),
           trip2Odo: extractSignalValue(signals, "VCU_Data6__Trip2_Odo_RX_V", 6500),
           slcOdo: extractSignalValue(signals, "VCU_Data5__SLC_Odo_RX_V", 6500),
-          odometer: extractSignalValue(signals, "VCU_Data5__Odometer_RX_V", 6500),
+          odometer: (() => {
+            const fromRedis = redisVehicleModes?.VCU_Data5__Odometer_RX_V != null;
+            const val = redisVehicleModes?.VCU_Data5__Odometer_RX_V
+              ?? extractSignalValue(signals, "VCU_Data5__Odometer_RX_V", 6500);
+            console.log(`[getVehicleStatuses] odometer: source=${fromRedis ? "REDIS" : "API"}, value=${val}`);
+            return val;
+          })(),
           lteConnStatus: extractSignalValue(signals, "RF_Parameters_2__LTE_Conn_Sts_TX_V", 6500),
           lteSignalStrength: getSignalStrength(signals),
           trip1DurationHrs: extractSignalValue(signals, "VCU_Data7__T1_Duration_Hrs_RX_V", 6500),
@@ -471,12 +477,24 @@ const root = {
           rideMode: extractSignalValue(signals, "Vehicle_Mode__Ride_Mode_Set_RX_V", 6500),
           absState: extractSignalValue(signals, "SOM_Settings_Data__ABS_State_Sel_TX_V", 6500),
           chargingMode: extractSignalValue(signals, "Chrgr_STS_Info__Chrgr_Mode_RX_V", 6500),
-          vehicleRange: extractSignalValue(signals, "Range_Info__DTE_Range_RX_V", 6500),
+          vehicleRange: (() => {
+            const fromRedis = redisVehicleModes?.Range_Info__DTE_Range_RX_V != null;
+            const val = redisVehicleModes?.Range_Info__DTE_Range_RX_V
+              ?? extractSignalValue(signals, "Range_Info__DTE_Range_RX_V", 6500);
+            console.log(`[getVehicleStatuses] vehicleRange: source=${fromRedis ? "REDIS" : "API"}, value=${val}`);
+            return val;
+          })(),
           conservativeRange: extractSignalValue(signals, "Range_Info__Cons_Range_RX_V", 6500),
           averageRange: extractSignalValue(signals, "Range_Info__Avg_Range_RX_V", 6500),
           aggressiveRange: extractSignalValue(signals, "Range_Info__Agg_Range_RX_V", 6500),
           rangeGain: extractSignalValue(signals, "Range_Info__Range_Gain_RX_V"),
-          batterySoc: extractSignalValue(signals, "Batt_Sts_Info__Display_SoC_RX_V", 6500),
+          batterySoc: (() => {
+            const fromRedis = redisVehicleModes?.Batt_Sts_Info__Display_SoC_RX_V != null;
+            const val = redisVehicleModes?.Batt_Sts_Info__Display_SoC_RX_V
+              ?? extractSignalValue(signals, "Batt_Sts_Info__Display_SoC_RX_V", 6500);
+            console.log(`[getVehicleStatuses] batterySoc: source=${fromRedis ? "REDIS" : "API"}, value=${val}`);
+            return val;
+          })(),
           chargingStatus: getChargingStatus(signals, redisVehicleModes),
           vehicleStatus: getVehicleStatus(signals, redisVehicleModes),
           lockStatus: extractSignalValue(signals, "VCU_Data__Veh_Authentication_Flag_RX_V", 6500),
