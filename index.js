@@ -185,6 +185,7 @@ const schema = buildSchema(`
     rideMode: String
     absState: String
     chargingMode: String
+    chargingRate: String
     vehicleRange: String
     conservativeRange: String
     averageRange: String
@@ -326,28 +327,10 @@ const getVehicleStatus = (signals, redisData = null) => {
     ?? extractSignalValue(signals, "Vehicle_Mode__Vehicle_Mode_Lvl_1_RX_V", 6500);
   console.log(`[vehicleStatus] Vehicle_Mode_Lvl_1: source=${lvl1FromRedis ? "REDIS" : "API"}, value=${modeLvl1}`);
 
-  // First check if vehicle is riding
   if (modeLvl1 === "4") return "Riding";
-
-  // Check if vehicle is charging
   if (modeLvl1 === "5") return "Charging";
 
-  // If not riding or charging, check lock status
-  const lvl3FromRedis = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_3_RX_V != null;
-  const modeLvl3 = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_3_RX_V
-    ?? extractSignalValue(signals, "Vehicle_Mode__Vehicle_Mode_Lvl_3_RX_V", 6500);
-  console.log(`[vehicleStatus] Vehicle_Mode_Lvl_3: source=${lvl3FromRedis ? "REDIS" : "API"}, value=${modeLvl3}`);
-
-  if (["1", "4", "6"].includes(modeLvl3)) return "Locked";
-
-  // If not locked, check parking status
-  const lvl2FromRedis = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V != null;
-  const modeLvl2 = redisData?.Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V
-    ?? extractSignalValue(signals, "Vehicle_Mode__Vehicle_Mode_Lvl_2_RX_V", 6500);
-  console.log(`[vehicleStatus] Vehicle_Mode_Lvl_2: source=${lvl2FromRedis ? "REDIS" : "API"}, value=${modeLvl2}`);
-  if (modeLvl2 === "12") return "Parked";
-
-  return "Unlocked";
+  return "Parked";
 };
 
 // Resolver function for the query
@@ -477,6 +460,7 @@ const root = {
           rideMode: extractSignalValue(signals, "Vehicle_Mode__Ride_Mode_Set_RX_V", 6500),
           absState: extractSignalValue(signals, "SOM_Settings_Data__ABS_State_Sel_TX_V", 6500),
           chargingMode: extractSignalValue(signals, "Chrgr_STS_Info__Chrgr_Mode_RX_V", 6500),
+          chargingRate: extractSignalValue(signals, "Display_info__VCU_Chrg_Rate_Sel_RX_V", 6500),
           vehicleRange: (() => {
             const fromRedis = redisVehicleModes?.Range_Info__DTE_Range_RX_V != null;
             const val = redisVehicleModes?.Range_Info__DTE_Range_RX_V
